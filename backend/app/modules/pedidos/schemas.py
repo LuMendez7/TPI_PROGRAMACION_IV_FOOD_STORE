@@ -3,6 +3,7 @@ from datetime import datetime
 
 from pydantic import BaseModel, Field, ConfigDict
 
+from typing import Literal
 
 class ItemPedidoCrear(BaseModel):
     producto_id: int = Field(gt=0)
@@ -10,7 +11,7 @@ class ItemPedidoCrear(BaseModel):
 
 
 class PedidoCrear(BaseModel):
-    forma_pago: str = Field(min_length=2, max_length=50)
+    forma_pago: Literal["EFECTIVO", "TRANSFERENCIA"]
     direccion_entrega: str = Field(min_length=5)
     notas: str | None = None
     items: list[ItemPedidoCrear] = Field(min_length=1)

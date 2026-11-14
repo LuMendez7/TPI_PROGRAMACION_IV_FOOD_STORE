@@ -84,3 +84,42 @@ export async function cambiarEstadoPedido(
     throw new Error(obtenerMensajeError(error));
   }
 }
+
+export async function cancelarPedidoCliente(
+  id: number
+): Promise<Pedido> {
+  try {
+    const respuesta = await api.patch<Pedido>(
+      `/pedidos/${id}/cancelar`
+    );
+
+    return respuesta.data;
+  } catch (error) {
+    throw new Error(obtenerMensajeError(error));
+  }
+}
+
+
+export interface PedidosPaginados {
+  pagina: number;
+  limite: number;
+  total: number;
+  paginas: number;
+  pedidos: Pedido[];
+}
+
+export async function listarPedidosPaginados(
+  pagina: number = 1,
+  limite: number = 10
+): Promise<PedidosPaginados> {
+  try {
+    const respuesta = await api.get<PedidosPaginados>(
+      "/pedidos/",
+      { params: { pagina, limite } }
+    );
+
+    return respuesta.data;
+  } catch (error) {
+    throw new Error(obtenerMensajeError(error));
+  }
+}

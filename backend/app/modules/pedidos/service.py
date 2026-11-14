@@ -3,6 +3,7 @@ from datetime import datetime, timezone
 
 from fastapi import HTTPException
 from sqlmodel import select
+from sqlalchemy import func
 
 from app.modules.pedidos.models import Pedido, DetallePedido
 from app.modules.pedidos.schemas import (
@@ -14,12 +15,17 @@ from app.modules.productos.models import Producto
 
 
 ESTADOS_VALIDOS = {
-    "pendiente",
-    "confirmado",
-    "preparando",
-    "enviado",
-    "entregado",
-    "cancelado",
+    "PENDIENTE",
+    "EN_PREPARACION",
+    "ENTREGADO",
+    "CANCELADO",
+}
+
+TRANSICIONES_PERMITIDAS = {
+    "PENDIENTE": {"EN_PREPARACION", "CANCELADO"},
+    "EN_PREPARACION": {"ENTREGADO", "CANCELADO"},
+    "ENTREGADO": set(),
+    "CANCELADO": set(),
 }
 
 
@@ -57,10 +63,16 @@ class PedidoService:
         cantidades = {}
 
         for item in datos.items:
-            cantidades[item.producto_id] = (
-                cantidades.get(item.producto_id, 0)
-                + item.cantidad
-            )
+            if item.producto_id in cantidades:
+                raise HTTPException(
+                    status_code=400,
+                    detail=(
+                        f"El producto {item.producto_id} "
+                        "está repetido en el pedido."
+                    ),
+                )
+
+            cantidades[item.producto_id] = item.cantidad
 
         with self.uow as uow:
             productos = {}
@@ -84,13 +96,13 @@ class PedidoService:
 
                 if not producto.activo or not producto.disponible:
                     raise HTTPException(
-                        status_code=409,
+                        status_code=400,
                         detail=f"Producto {producto_id} no disponible.",
                     )
 
                 if producto.stock < cantidades[producto_id]:
                     raise HTTPException(
-                        status_code=409,
+                        status_code=400,
                         detail=f"Stock insuficiente: {producto.nombre}.",
                     )
 
@@ -105,7 +117,7 @@ class PedidoService:
 
             pedido = Pedido(
                 usuario_id=usuario_id,
-                estado="pendiente",
+                estado="PENDIENTE",
                 forma_pago=datos.forma_pago,
                 direccion_entrega=datos.direccion_entrega,
                 notas=datos.notas,
@@ -137,6 +149,63 @@ class PedidoService:
                 uow.productos.actualizar(producto)
 
             uow.session.flush()
+
+            return self.convertir_pedido(pedido, detalles)
+
+    def cancelar_por_cliente(self, pedido_id: int, usuario_id: int):
+        with self.uow as uow:
+            # Bloquear el pedido durante la verificación y cancelación.
+            statement = (
+                select(Pedido)
+                .where(Pedido.id == pedido_id)
+                .with_for_update()
+            )
+
+            pedido = uow.session.exec(statement).first()
+
+            if pedido is None:
+                raise HTTPException(
+                    status_code=404,
+                    detail="Pedido no encontrado.",
+                )
+
+            if pedido.usuario_id != usuario_id:
+                raise HTTPException(
+                    status_code=403,
+                    detail="No podés cancelar un pedido de otro usuario.",
+                )
+
+            if pedido.estado.upper() != "PENDIENTE":
+                raise HTTPException(
+                    status_code=400,
+                    detail="Solo se pueden cancelar pedidos pendientes.",
+                )
+
+            detalles = uow.detalles.listar_por_pedido(pedido.id)
+
+            # Restaurar el stock de cada producto.
+            for detalle in sorted(
+                detalles,
+                key=lambda d: d.producto_id,
+            ):
+                statement_producto = (
+                    select(Producto)
+                    .where(Producto.id == detalle.producto_id)
+                    .with_for_update()
+                )
+
+                producto = uow.session.exec(
+                    statement_producto
+                ).first()
+
+                if producto is not None:
+                    producto.stock += detalle.cantidad
+                    uow.productos.actualizar(producto)
+
+            pedido.estado = "CANCELADO"
+            pedido.updated_at = datetime.now(timezone.utc)
+
+            uow.pedidos.actualizar(pedido)
 
             return self.convertir_pedido(pedido, detalles)
 
@@ -177,51 +246,131 @@ class PedidoService:
                 for pedido in pedidos
             ]
 
+
+    def listar_paginados(self, pagina: int = 1, limite: int = 10):
+        with self.uow as uow:
+            total = uow.session.exec(
+                select(func.count()).select_from(Pedido)
+            ).one()
+
+            statement = (
+                select(Pedido)
+                .order_by(Pedido.created_at.desc(), Pedido.id.desc())
+                .offset((pagina - 1) * limite)
+                .limit(limite)
+            )
+
+            pedidos = uow.session.exec(statement).all()
+
+            return {
+                "pagina": pagina,
+                "limite": limite,
+                "total": total,
+                "paginas": (total + limite - 1) // limite,
+                "pedidos": [
+                    self.convertir_pedido(
+                        pedido,
+                        uow.detalles.listar_por_pedido(pedido.id),
+                    )
+                    for pedido in pedidos
+                ],
+            }
+
+    def obtener_resumen(self):
+        with self.uow as uow:
+            pedidos = uow.session.exec(select(Pedido)).all()
+
+            por_estado = {
+                "PENDIENTE": 0,
+                "EN_PREPARACION": 0,
+                "ENTREGADO": 0,
+                "CANCELADO": 0,
+            }
+
+            total_vendido = 0.0
+
+            for pedido in pedidos:
+                estado = pedido.estado.upper()
+
+                if estado in por_estado:
+                    por_estado[estado] += 1
+
+                if estado == "ENTREGADO":
+                    total_vendido += pedido.total
+
+            return {
+                "total_pedidos": len(pedidos),
+                "por_estado": por_estado,
+                "total_vendido": round(total_vendido, 2),
+            }
+
+
     def cambiar_estado(
         self,
         pedido_id: int,
         datos: PedidoEstadoActualizar,
     ):
-        if datos.estado not in ESTADOS_VALIDOS:
-            raise HTTPException(422, "Estado de pedido inválido.")
+        nuevo_estado = datos.estado.upper()
+
+        if nuevo_estado not in ESTADOS_VALIDOS:
+            raise HTTPException(
+                status_code=400,
+                detail="Estado de pedido inválido.",
+            )
 
         with self.uow as uow:
-            pedido = uow.pedidos.obtener_por_id(pedido_id)
+            # Bloquear el pedido para evitar cambios simultáneos.
+            statement = (
+                select(Pedido)
+                .where(Pedido.id == pedido_id)
+                .with_for_update()
+            )
+
+            pedido = uow.session.exec(statement).first()
 
             if pedido is None:
-                raise HTTPException(404, "Pedido no encontrado.")
-
-            if pedido.estado == "cancelado" and datos.estado != "cancelado":
                 raise HTTPException(
-                    409,
-                    "No se puede reactivar un pedido cancelado.",
+                    status_code=404,
+                    detail="Pedido no encontrado.",
                 )
 
-            if pedido.estado == "entregado" and datos.estado != "entregado":
+            estado_actual = pedido.estado.upper()
+
+            if nuevo_estado not in TRANSICIONES_PERMITIDAS.get(
+                estado_actual, set()
+            ):
                 raise HTTPException(
-                    409,
-                    "No se puede modificar un pedido entregado.",
+                    status_code=400,
+                    detail=(
+                        f"No se permite cambiar el estado "
+                        f"de {estado_actual} a {nuevo_estado}."
+                    ),
                 )
 
-            if datos.estado == "cancelado" and pedido.estado != "cancelado":
+            if nuevo_estado == "CANCELADO":
                 detalles = uow.detalles.listar_por_pedido(pedido.id)
 
-                for detalle in sorted(detalles, key=lambda d: d.producto_id):
+                for detalle in sorted(
+                    detalles,
+                    key=lambda d: d.producto_id,
+                ):
                     statement = (
                         select(Producto)
                         .where(Producto.id == detalle.producto_id)
                         .with_for_update()
                     )
+
                     producto = uow.session.exec(statement).first()
 
                     if producto is not None:
                         producto.stock += detalle.cantidad
                         uow.productos.actualizar(producto)
 
-            pedido.estado = datos.estado
+            pedido.estado = nuevo_estado
             pedido.updated_at = datetime.now(timezone.utc)
 
             uow.pedidos.actualizar(pedido)
 
             detalles = uow.detalles.listar_por_pedido(pedido.id)
+
             return self.convertir_pedido(pedido, detalles)

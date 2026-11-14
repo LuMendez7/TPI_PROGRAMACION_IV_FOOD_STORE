@@ -1,5 +1,5 @@
 
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, Query, status
 
 from app.core.deps import obtener_usuario_actual, requerir_admin
 from app.modules.usuarios.models import Usuario
@@ -53,6 +53,27 @@ def listar_todos(
     return service.listar_todos()
 
 
+@router.get("/")
+def listar_pedidos_paginados(
+    pagina: int = Query(default=1, ge=1),
+    limite: int = Query(default=10, ge=1, le=100),
+    admin: Usuario = Depends(requerir_admin),
+    service: PedidoService = Depends(obtener_servicio),
+):
+    return service.listar_paginados(
+        pagina=pagina,
+        limite=limite,
+    )
+
+
+@router.get("/resumen")
+def resumen_administrativo(
+    admin: Usuario = Depends(requerir_admin),
+    service: PedidoService = Depends(obtener_servicio),
+):
+    return service.obtener_resumen()
+
+
 @router.get("/{pedido_id}", response_model=PedidoLeer)
 def obtener_pedido(
     pedido_id: int,
@@ -77,3 +98,17 @@ def cambiar_estado(
     service: PedidoService = Depends(obtener_servicio),
 ):
     return service.cambiar_estado(pedido_id, datos)
+
+@router.patch(
+    "/{pedido_id}/cancelar",
+    response_model=PedidoLeer,
+)
+def cancelar_pedido_cliente(
+    pedido_id: int,
+    usuario: Usuario = Depends(obtener_usuario_actual),
+    service: PedidoService = Depends(obtener_servicio),
+):
+    return service.cancelar_por_cliente(
+        pedido_id=pedido_id,
+        usuario_id=usuario.id,
+    )

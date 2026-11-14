@@ -8,17 +8,17 @@ import {
   listarPedidos,
   crearPedido,
   cambiarEstadoPedido,
+  cancelarPedidoCliente,
+  listarPedidosPaginados,
 } from "../services/pedidoService";
 import type { PedidoCreate, DetallePedidoCreate } from "../types/pedido";
 
-const ESTADOS = [
-  "pendiente",
-  "confirmado",
-  "preparando",
-  "enviado",
-  "entregado",
-  "cancelado",
-];
+const TRANSICIONES_PERMITIDAS: Record<string, string[]> = {
+  PENDIENTE: ["EN_PREPARACION", "CANCELADO"],
+  EN_PREPARACION: ["ENTREGADO", "CANCELADO"],
+  ENTREGADO: [],
+  CANCELADO: [],
+};
 
 const dinero = (valor: number) =>
   valor.toLocaleString("es-AR", { style: "currency", currency: "ARS" });
@@ -31,7 +31,7 @@ const botonAzul =
 
 function formularioVacio(): PedidoCreate {
   return {
-    forma_pago: "efectivo",
+    forma_pago: "EFECTIVO",
     direccion_entrega: "",
     notas: "",
     items: [{ producto_id: 0, cantidad: 1 }],
@@ -40,16 +40,26 @@ function formularioVacio(): PedidoCreate {
 
 function etiquetaEstado(estado: string) {
   const estilos: Record<string, string> = {
-    pendiente: "bg-amber-100 text-amber-900 dark:!bg-amber-900/40 dark:!text-amber-200",
-    confirmado: "bg-blue-100 text-blue-800 dark:!bg-blue-900/40 dark:!text-blue-200",
-    preparando: "bg-violet-100 text-violet-800 dark:!bg-violet-900/40 dark:!text-violet-200",
-    enviado: "bg-cyan-100 text-cyan-800 dark:!bg-cyan-900/40 dark:!text-cyan-200",
-    entregado: "bg-green-100 text-green-800 dark:!bg-green-900/40 dark:!text-green-200",
-    cancelado: "bg-red-100 text-red-800 dark:!bg-red-900/40 dark:!text-red-200",
+    PENDIENTE:
+      "bg-amber-100 text-amber-900 dark:!bg-amber-900/40 dark:!text-amber-200",
+    EN_PREPARACION:
+      "bg-violet-100 text-violet-800 dark:!bg-violet-900/40 dark:!text-violet-200",
+    ENTREGADO:
+      "bg-green-100 text-green-800 dark:!bg-green-900/40 dark:!text-green-200",
+    CANCELADO:
+      "bg-red-100 text-red-800 dark:!bg-red-900/40 dark:!text-red-200",
   };
+
+  const estadoNormalizado = estado.toUpperCase();
+
   return (
-    <span className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold capitalize ${estilos[estado] ?? "bg-slate-100 text-slate-800 dark:!bg-slate-700 dark:!text-white"}`}>
-      {estado}
+    <span
+      className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold ${
+        estilos[estadoNormalizado] ??
+        "bg-slate-100 text-slate-800 dark:!bg-slate-700 dark:!text-white"
+      }`}
+    >
+      {estadoNormalizado.replaceAll("_", " ")}
     </span>
   );
 }
@@ -64,16 +74,34 @@ export default function PedidosPage() {
   const [detallesAbiertos, setDetallesAbiertos] = useState<number[]>([]);
   const [error, setError] = useState("");
   const [mensaje, setMensaje] = useState("");
+  const [pagina, setPagina] = useState(1);
 
   const {
-    data: pedidos = [],
+    data: resultadoPedidos,
     isLoading,
     isError,
   } = useQuery({
-    queryKey: ["pedidos", esAdmin],
-    queryFn: () => listarPedidos(esAdmin),
+    queryKey: ["pedidos", esAdmin, pagina],
+    queryFn: async () => {
+      if (esAdmin) {
+        return await listarPedidosPaginados(pagina, 10);
+      }
+
+      const pedidos = await listarPedidos(false);
+
+      return {
+        pagina: 1,
+        limite: pedidos.length,
+        total: pedidos.length,
+        paginas: 1,
+        pedidos,
+      };
+    },
     enabled: Boolean(usuario),
   });
+
+  const pedidos = resultadoPedidos?.pedidos ?? [];
+  const totalPaginas = resultadoPedidos?.paginas ?? 1;
 
   const {
     data: productos = [],
@@ -84,6 +112,32 @@ export default function PedidosPage() {
     queryFn: listarProductos,
     enabled: mostrarFormulario,
   });
+  const cancelarMutation = useMutation({
+    mutationFn: cancelarPedidoCliente,
+    onSuccess: async () => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["pedidos"] }),
+        queryClient.invalidateQueries({ queryKey: ["productos"] }),
+      ]);
+
+      setError("");
+      setMensaje("Pedido cancelado y stock restituido correctamente.");
+    },
+    onError: (err: Error) => {
+      setMensaje("");
+      setError(err.message);
+    },
+  });
+
+  function cancelarPedido(id: number) {
+    if (!window.confirm(`¿Confirmás cancelar el pedido #${id}?`)) {
+      return;
+    }
+
+    setError("");
+    setMensaje("");
+    cancelarMutation.mutate(id);
+  }
 
   const crearMutation = useMutation({
     mutationFn: crearPedido,
@@ -246,9 +300,8 @@ export default function PedidosPage() {
                   setFormulario({ ...formulario, forma_pago: e.target.value })
                 }
               >
-                <option value="efectivo">Efectivo</option>
-                <option value="transferencia">Transferencia</option>
-                <option value="tarjeta">Tarjeta</option>
+                <option value="EFECTIVO">Efectivo</option>
+                <option value="TRANSFERENCIA">Transferencia</option>
               </select>
             </label>
             <label className="block text-sm font-medium">
@@ -395,10 +448,13 @@ export default function PedidosPage() {
               )}
               {pedidos.map((pedido) => {
                 const abierto = detallesAbiertos.includes(pedido.id);
+                const estadoActual = pedido.estado.toUpperCase();
+
+                const opcionesEstado =
+                  TRANSICIONES_PERMITIDAS[estadoActual] ?? [];
+
                 const puedeCambiarEstado =
-                  esAdmin &&
-                  pedido.estado !== "cancelado" &&
-                  pedido.estado !== "entregado";
+                  esAdmin && opcionesEstado.length > 0;
 
                 return (
                   <tr key={pedido.id}>
@@ -428,6 +484,18 @@ export default function PedidosPage() {
                               >
                                 {abierto ? "Ocultar detalle" : "Ver detalle"}
                               </button>
+                              {!esAdmin && estadoActual === "PENDIENTE" && (
+                                <button
+                                  type="button"
+                                  onClick={() => cancelarPedido(pedido.id)}
+                                  disabled={cancelarMutation.isPending}
+                                  className="ml-2 rounded-lg bg-red-600 px-3 py-2 font-medium text-white hover:bg-red-700 disabled:opacity-50"
+                                >
+                                  {cancelarMutation.isPending
+                                    ? "Procesando..."
+                                    : "Cancelar pedido"}
+                                </button>
+                              )}
                             </td>
                           </tr>
                           {abierto && (
@@ -470,12 +538,18 @@ export default function PedidosPage() {
                                     <select
                                       id={`estado-${pedido.id}`}
                                       className={`${campo} !mt-0 max-w-xs`}
-                                      value={pedido.estado}
-                                      disabled={estadoMutation.isPending}
-                                      onChange={(e) => actualizarEstado(pedido.id, e.target.value)}
+                                    value=""
+                                    disabled={estadoMutation.isPending}
+                                    onChange={(e) => actualizarEstado(pedido.id, e.target.value)}
                                     >
-                                      {ESTADOS.map((estado) => (
-                                        <option key={estado} value={estado}>{estado}</option>
+                                      <option value="" disabled>
+                                        Seleccionar nuevo estado
+                                      </option>
+
+                                      {opcionesEstado.map((estado) => (
+                                        <option key={estado} value={estado}>
+                                          {estado.replaceAll("_", " ")}
+                                        </option>
                                       ))}
                                     </select>
                                   </div>
@@ -491,6 +565,32 @@ export default function PedidosPage() {
               })}
             </tbody>
           </table>
+        </div>
+      )}
+
+      {esAdmin && !isLoading && !isError && totalPaginas > 1 && (
+        <div className="flex items-center justify-center gap-4">
+          <button
+            type="button"
+            disabled={pagina <= 1}
+            onClick={() => setPagina((actual) => actual - 1)}
+            className="rounded-lg bg-blue-600 px-4 py-2 text-white disabled:opacity-50"
+          >
+            Anterior
+          </button>
+
+          <span className="font-medium">
+            Página {pagina} de {totalPaginas}
+          </span>
+
+          <button
+            type="button"
+            disabled={pagina >= totalPaginas}
+            onClick={() => setPagina((actual) => actual + 1)}
+            className="rounded-lg bg-blue-600 px-4 py-2 text-white disabled:opacity-50"
+          >
+            Siguiente
+          </button>
         </div>
       )}
     </section>

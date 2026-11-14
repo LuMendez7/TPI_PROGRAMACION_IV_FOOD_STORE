@@ -64,3 +64,9 @@ def test_crear_pedido_sin_login():
         },
     )
     assert respuesta.status_code == 401
+
+
+def test_cancelar_pedido_sin_login():
+    respuesta = client.patch("/api/v1/pedidos/1/cancelar")
+
+    assert respuesta.status_code == 401

@@ -44,7 +44,7 @@ export default function CarritoPage() {
     (state) => state.vaciarCarrito
   );
 
-  const [formaPago, setFormaPago] = useState("efectivo");
+  const [formaPago, setFormaPago] = useState("EFECTIVO");
   const [direccionEntrega, setDireccionEntrega] = useState("");
   const [notas, setNotas] = useState("");
 
@@ -115,7 +115,7 @@ export default function CarritoPage() {
 
       setDireccionEntrega("");
       setNotas("");
-      setFormaPago("efectivo");
+      setFormaPago("EFECTIVO");
 
       setMensaje(
         `¡Pedido #${pedido.id} confirmado correctamente! Total: ${formatearPrecio(pedido.total)}.`
@@ -356,11 +356,8 @@ export default function CarritoPage() {
                   disabled={procesando}
                   className={campo}
                 >
-                  <option value="efectivo">Efectivo</option>
-                  <option value="transferencia">
-                    Transferencia
-                  </option>
-                  <option value="tarjeta">Tarjeta</option>
+                  <option value="EFECTIVO">Efectivo</option>
+                  <option value="TRANSFERENCIA">Transferencia</option>
                 </select>
               </div>
 

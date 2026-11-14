@@ -1,9 +1,11 @@
+
 import { Navigate, Route, Routes } from "react-router-dom";
 
 import Navbar from "@/shared/components/Navbar";
 import ProtectedRoute from "@/routes/ProtectedRoute";
 import CatalogoPage from "@/pages/CatalogoPage";
 import CarritoPage from "@/features/carrito/pages/CarritoPage";
+import ResumenPedidosPage from "@/features/pedidos/pages/ResumenPedidosPage";
 
 import { LoginPage, RegistroPage, UnauthorizedPage } from "@/features/auth";
 import { CategoriasPage } from "@/features/categorias";
@@ -16,29 +18,38 @@ export default function AppRouter() {
   return (
     <>
       <Navbar />
+
       <main className="mx-auto max-w-6xl p-6">
         <Routes>
-          <Route path="/" element={<CatalogoPage />} />
-
           {/* Rutas públicas */}
+          <Route path="/" element={<CatalogoPage />} />
           <Route path="/login" element={<LoginPage />} />
           <Route path="/register" element={<RegistroPage />} />
           <Route path="/registro" element={<Navigate to="/register" replace />} />
           <Route path="/unauthorized" element={<UnauthorizedPage />} />
           <Route path="/catalogo" element={<CatalogoPage />} />
 
-          {/* Rutas protegidas */}
+          {/* Rutas para usuarios autenticados */}
           <Route element={<ProtectedRoute />}>
             <Route path="/categories" element={<CategoriasPage />} />
             <Route path="/products" element={<ProductosPage />} />
             <Route path="/ingredients" element={<IngredientesPage />} />
             <Route path="/pedidos" element={<PedidosPage />} />
             <Route path="/carrito" element={<CarritoPage />} />
+            <Route path="/mis-pedidos" element={<PedidosPage />} />
+            {/* Nuevas rutas del cliente */}
+            <Route path="/checkout" element={<CarritoPage />} />
           </Route>
 
-          {/* Rutas exclusivas de ADMIN */}
+          {/* Rutas exclusivas del administrador */}
           <Route element={<ProtectedRoute allowedRoles={["admin"]} />}>
             <Route path="/admin/users" element={<AdminUsersPage />} />
+
+            <Route path="/admin/usuarios" element={<AdminUsersPage />} />
+            <Route path="/admin/categorias" element={<CategoriasPage />} />
+            <Route path="/admin/productos" element={<ProductosPage />} />
+            <Route path="/admin/pedidos" element={<PedidosPage />} />
+            <Route path="/admin/resumen" element={<ResumenPedidosPage />} />
           </Route>
 
           {/* Redirecciones de compatibilidad */}

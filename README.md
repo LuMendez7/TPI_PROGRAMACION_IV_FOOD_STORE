@@ -1,4 +1,4 @@
-﻿# FOOD STORE
+# FOOD STORE
 ## Trabajo Práctico Integrador - Programación IV
 
 ### Descripción
@@ -35,6 +35,13 @@ Frontend:
 - Carrito de compras.
 - Consulta y administración de pedidos.
 - Gestión de estados de pedidos.
+- Validación de transiciones entre estados.
+- Cancelación de pedidos pendientes por el cliente.
+- Restitución automática del stock al cancelar.
+- Validación de disponibilidad, stock y productos duplicados.
+- Paginación de pedidos para administradores.
+- Panel administrativo con resumen de pedidos y ventas.
+- Pruebas automatizadas del backend.
 - Interfaz adaptable a diferentes pantallas.
 - Modo claro y oscuro.
 
@@ -168,11 +175,11 @@ Instalar las dependencias:
 
 Verificar la compilación:
 
-    pnpm build
+    pnpm run build
 
 Iniciar el frontend:
 
-    pnpm dev
+    pnpm run dev
 
 La aplicación estará disponible normalmente en:
 
@@ -207,5 +214,3 @@ Se excluyen, entre otros:
 - Archivos temporales y respaldos innecesarios
 
 Los archivos .env.example deben conservarse.
-
-

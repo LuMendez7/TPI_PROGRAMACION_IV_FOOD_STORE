@@ -1,0 +1,43 @@
+﻿# Variables de entorno y credenciales
+.env
+.env.*
+!.env.example
+
+# Entornos virtuales de Python
+.venv/
+venv/
+env/
+
+# Cache de Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Dependencias y compilaciones del frontend
+node_modules/
+dist/
+build/
+.vite/
+*.tsbuildinfo
+
+# Archivos temporales y registros
+*.log
+*.tmp
+*.bak
+*.zip
+*~
+.DS_Store
+Thumbs.db
+
+# Respaldos e inventarios locales
+README_BACKUP.md
+INVENTARIO_BACKEND.txt
+main_unidad8_backup.py
+
+# Configuración local de editores
+.vscode/
+.idea/

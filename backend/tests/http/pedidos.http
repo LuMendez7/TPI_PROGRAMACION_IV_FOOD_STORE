@@ -1,0 +1,117 @@
+
+### TP INTEGRADOR - UNIDAD 8
+### PRUEBAS REST CLIENT - PEDIDOS Y DETALLEPEDIDO
+
+@baseUrl = http://127.0.0.1:8000
+
+### 1. CONSULTAR PRODUCTOS
+### Verificar que exista un producto antes de crear el pedido
+
+GET {{baseUrl}}/productos/
+Accept: application/json
+
+
+### 2. LISTAR TODOS LOS PEDIDOS
+
+GET {{baseUrl}}/pedidos/
+Accept: application/json
+
+
+### 3. CREAR UN PEDIDO
+### IMPORTANTE: producto_id debe existir.
+### En este ejemplo se utiliza el producto con ID 1.
+
+POST {{baseUrl}}/pedidos/
+Content-Type: application/json
+
+{
+  "cliente": "Juan Perez",
+  "estado": "pendiente",
+  "detalles": [
+    {
+      "producto_id": 1,
+      "cantidad": 2
+    }
+  ]
+}
+
+
+
+### 4. CONSULTAR UN PEDIDO POR ID
+### Pedido creado con ID 2
+
+GET {{baseUrl}}/pedidos/2
+Accept: application/json
+
+
+
+### 5. ACTUALIZAR UN PEDIDO
+### Cambiar el estado del pedido ID 2 a confirmado
+
+PUT {{baseUrl}}/pedidos/2
+Content-Type: application/json
+
+{
+  "cliente": "Juan Perez",
+  "estado": "confirmado",
+  "detalles": [
+    {
+      "producto_id": 1,
+      "cantidad": 2
+    }
+  ]
+}
+
+
+
+### 6. LISTAR DETALLES DE PEDIDOS
+
+GET {{baseUrl}}/detalles-pedido/
+Accept: application/json
+
+
+
+### 7. CONSULTAR UN DETALLE POR ID
+### Detalle actualizado con ID 3
+
+GET {{baseUrl}}/detalles-pedido/3
+Accept: application/json
+
+
+
+### 8. PROBAR VALIDACION 422
+### Un pedido sin detalles debe ser rechazado.
+
+POST {{baseUrl}}/pedidos/
+Content-Type: application/json
+
+{
+  "cliente": "Pedido Invalido",
+  "estado": "pendiente",
+  "detalles": []
+}
+
+
+
+### 9. ELIMINAR UN PEDIDO
+### Eliminar el pedido creado con ID 2
+
+DELETE {{baseUrl}}/pedidos/2
+Accept: application/json
+
+
+
+
+### 10. VERIFICAR QUE EL PEDIDO FUE ELIMINADO
+### El pedido ID 2 ya no debe existir
+
+GET {{baseUrl}}/pedidos/2
+Accept: application/json
+
+
+
+### 11. VERIFICAR ELIMINACION DEL DETALLE
+### El detalle ID 3 pertenecia al pedido ID 2 eliminado
+
+GET {{baseUrl}}/detalles-pedido/3
+Accept: application/json

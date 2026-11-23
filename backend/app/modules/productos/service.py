@@ -1,12 +1,15 @@
 
-from fastapi import HTTPException, status
-
 from app.modules.productos.models import Producto
 from app.modules.productos.schemas import (
     ProductoCrear,
     ProductoActualizar,
 )
 from app.modules.productos.unit_of_work import ProductoUnitOfWork
+from app.modules.productos.exceptions import (
+    ProductoNoEncontradoError,
+    CategoriaProductoNoValidaError,
+    ProductoDatoInvalidoError,
+)
 
 
 class ProductoService:
@@ -18,16 +21,61 @@ class ProductoService:
         with self.uow as uow:
             if solo_activos:
                 return uow.productos.listar_activos()
+
             return uow.productos.listar()
+
+    def listar_paginados(
+        self,
+        skip: int = 0,
+        limit: int = 10,
+        buscar: str | None = None,
+        categoria_id: int | None = None,
+        disponible: bool | None = None,
+        solo_activos: bool = True,
+    ):
+        """Lista productos con paginación, búsqueda y filtros."""
+
+        with self.uow as uow:
+            if solo_activos:
+                productos = uow.productos.listar_activos()
+            else:
+                productos = uow.productos.listar()
+
+            if buscar:
+                texto = buscar.strip().casefold()
+
+                productos = [
+                    p for p in productos
+                    if texto in p.nombre.casefold()
+                    or texto in (p.descripcion or "").casefold()
+                ]
+
+            if categoria_id is not None:
+                productos = [
+                    p for p in productos
+                    if p.categoria_id == categoria_id
+                ]
+
+            if disponible is not None:
+                productos = [
+                    p for p in productos
+                    if p.disponible == disponible
+                ]
+
+            total = len(productos)
+
+            return {
+                "total": total,
+                "items": productos[skip:skip + limit],
+            }
 
     def obtener(self, producto_id: int):
         with self.uow as uow:
             producto = uow.productos.obtener_por_id(producto_id)
 
             if producto is None:
-                raise HTTPException(
-                    status_code=404,
-                    detail="Producto no encontrado.",
+                raise ProductoNoEncontradoError(
+                    "Producto no encontrado."
                 )
 
             return producto
@@ -39,9 +87,8 @@ class ProductoService:
             )
 
             if categoria is None or not categoria.activo:
-                raise HTTPException(
-                    status_code=404,
-                    detail="Categoría inexistente o inactiva.",
+                raise CategoriaProductoNoValidaError(
+                    "Categoría inexistente o inactiva."
                 )
 
             producto = Producto(
@@ -62,9 +109,8 @@ class ProductoService:
             producto = uow.productos.obtener_por_id(producto_id)
 
             if producto is None:
-                raise HTTPException(
-                    status_code=404,
-                    detail="Producto no encontrado.",
+                raise ProductoNoEncontradoError(
+                    "Producto no encontrado."
                 )
 
             cambios = datos.model_dump(exclude_unset=True)
@@ -73,9 +119,8 @@ class ProductoService:
                 nueva_categoria_id = cambios["categoria_id"]
 
                 if nueva_categoria_id is None:
-                    raise HTTPException(
-                        status_code=422,
-                        detail="La categoría no puede ser nula.",
+                    raise ProductoDatoInvalidoError(
+                        "La categoría no puede ser nula."
                     )
 
                 categoria = uow.categorias.obtener_por_id(
@@ -83,22 +128,24 @@ class ProductoService:
                 )
 
                 if categoria is None or not categoria.activo:
-                    raise HTTPException(
-                        status_code=404,
-                        detail="Categoría inexistente o inactiva.",
+                    raise CategoriaProductoNoValidaError(
+                        "Categoría inexistente o inactiva."
                     )
 
-            for campo in ("precio_base", "stock", "disponible", "activo"):
+            for campo in (
+                "precio_base",
+                "stock",
+                "disponible",
+                "activo",
+            ):
                 if campo in cambios and cambios[campo] is None:
-                    raise HTTPException(
-                        status_code=422,
-                        detail=f"El campo {campo} no puede ser nulo.",
+                    raise ProductoDatoInvalidoError(
+                        f"El campo {campo} no puede ser nulo."
                     )
 
             if "nombre" in cambios and cambios["nombre"] is None:
-                raise HTTPException(
-                    status_code=422,
-                    detail="El nombre no puede ser nulo.",
+                raise ProductoDatoInvalidoError(
+                    "El nombre no puede ser nulo."
                 )
 
             for campo, valor in cambios.items():
@@ -113,12 +160,12 @@ class ProductoService:
             producto = uow.productos.obtener_por_id(producto_id)
 
             if producto is None:
-                raise HTTPException(
-                    status_code=404,
-                    detail="Producto no encontrado.",
+                raise ProductoNoEncontradoError(
+                    "Producto no encontrado."
                 )
 
             producto.activo = False
+
             uow.productos.actualizar(producto)
 
             return None

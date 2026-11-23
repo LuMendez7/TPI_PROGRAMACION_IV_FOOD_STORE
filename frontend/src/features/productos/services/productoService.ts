@@ -35,13 +35,37 @@ function obtenerMensajeError(error: unknown): string {
 
 export async function listarProductos(): Promise<Producto[]> {
   try {
-    const response = await api.get<Producto[]>('/productos/')
-    return response.data
+    const productos: Producto[] = []
+    const limite = 100
+    let skip = 0
+
+    while (true) {
+      const response = await api.get<{
+        total: number
+        items: Producto[]
+      }>('/productos/paginados', {
+        params: {
+          skip,
+          limit: limite,
+          solo_activos: false,
+        },
+      })
+
+      const pagina = response.data
+
+      productos.push(...pagina.items)
+      skip += pagina.items.length
+
+      if (pagina.items.length === 0 || skip >= pagina.total) {
+        break
+      }
+    }
+
+    return productos
   } catch (error) {
     throw new Error(obtenerMensajeError(error), { cause: error })
   }
 }
-
 export async function crearProducto(
   producto: ProductoCreate
 ): Promise<Producto> {
@@ -78,5 +102,23 @@ export async function eliminarProducto(id: number): Promise<void> {
     await api.delete(`/productos/${id}`)
   } catch (error) {
     throw new Error(obtenerMensajeError(error), { cause: error })
+  }
+}
+
+export async function actualizarStockProducto(
+  id: number,
+  stock: number
+): Promise<Producto> {
+  try {
+    const response = await api.patch<Producto>(
+      `/productos/${id}/stock`,
+      { stock }
+    );
+
+    return response.data;
+  } catch (error) {
+    throw new Error(obtenerMensajeError(error), {
+      cause: error,
+    });
   }
 }

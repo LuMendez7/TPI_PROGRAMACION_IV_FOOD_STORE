@@ -1,6 +1,7 @@
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException, status
 
+from app.core.deps import require_role
 from app.core.deps import requerir_admin
 from app.modules.usuarios.models import Usuario
 from app.modules.usuarios.schemas import (
@@ -76,4 +77,48 @@ def cambiar_rol(
     return service.cambiar_rol(
         usuario_id,
         datos.role,
+    )
+
+# Rutas administrativas solicitadas en la consigna.
+# Se conservan las rutas existentes por compatibilidad.
+
+admin_router = APIRouter(
+    prefix="/api/v1/admin",
+    tags=["Administración de usuarios"],
+    dependencies=[Depends(require_role(["admin"]))],
+)
+
+
+@admin_router.patch(
+    "/usuarios/{usuario_id}/activar",
+    response_model=UsuarioLeer,
+)
+def activar_usuario(
+    usuario_id: int,
+    service: UsuarioService = Depends(obtener_servicio),
+):
+    return service.cambiar_estado(
+        usuario_id,
+        False,
+    )
+
+
+@admin_router.patch(
+    "/usuarios/{usuario_id}/desactivar",
+    response_model=UsuarioLeer,
+)
+def desactivar_usuario(
+    usuario_id: int,
+    admin: Usuario = Depends(require_role(["admin"])),
+    service: UsuarioService = Depends(obtener_servicio),
+):
+    if admin.id == usuario_id:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="No podés desactivar tu propia cuenta.",
+        )
+
+    return service.cambiar_estado(
+        usuario_id,
+        True,
     )

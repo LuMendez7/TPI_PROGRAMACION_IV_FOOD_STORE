@@ -47,3 +47,36 @@ def requerir_admin(
         )
 
     return usuario
+
+from collections.abc import Iterable
+
+
+def get_current_active_user(
+    usuario: Usuario = Depends(obtener_usuario_actual),
+) -> Usuario:
+    """Devuelve el usuario autenticado y activo."""
+    if usuario.disabled:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="La cuenta está deshabilitada.",
+        )
+
+    return usuario
+
+
+def require_role(roles: Iterable[str]):
+    """Permite el acceso únicamente a los roles indicados."""
+    roles_permitidos = set(roles)
+
+    def verificar_rol(
+        usuario: Usuario = Depends(get_current_active_user),
+    ) -> Usuario:
+        if usuario.role not in roles_permitidos:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="No tenés permisos para realizar esta operación.",
+            )
+
+        return usuario
+
+    return verificar_rol

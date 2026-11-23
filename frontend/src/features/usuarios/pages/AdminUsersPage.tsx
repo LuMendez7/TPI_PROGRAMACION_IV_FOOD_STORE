@@ -1,6 +1,11 @@
 
-import { useCallback, useEffect, useState } from "react";
+import { useState } from "react";
 import axios from "axios";
+import {
+  useMutation,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
 
 import { api } from "../../../api/axios";
 
@@ -13,38 +18,84 @@ interface UsuarioAdmin {
   disabled: boolean;
 }
 
+const usuariosQueryKey = ["admin", "usuarios"] as const;
+
+async function listarUsuarios(): Promise<UsuarioAdmin[]> {
+  const respuesta = await api.get<UsuarioAdmin[]>("/usuarios/");
+  return respuesta.data;
+}
+
+async function modificarEstado(usuario: UsuarioAdmin): Promise<void> {
+  await api.patch(`/usuarios/${usuario.id}/estado`, {
+    disabled: !usuario.disabled,
+  });
+}
+
+function obtenerMensajeError(error: unknown): string {
+  if (axios.isAxiosError(error)) {
+    if (error.response?.status === 403) {
+      return "No tenés permisos para administrar usuarios.";
+    }
+
+    const detalle: unknown = error.response?.data?.detail;
+
+    if (typeof detalle === "string") {
+      return detalle;
+    }
+  }
+
+  return "No se pudo completar la operación.";
+}
+
 export default function AdminUsersPage() {
-  const [usuarios, setUsuarios] = useState<UsuarioAdmin[]>([]);
-  const [cargando, setCargando] = useState(true);
-  const [procesandoId, setProcesandoId] = useState<number | null>(null);
-  const [error, setError] = useState("");
+  const queryClient = useQueryClient();
+
+  const [errorAccion, setErrorAccion] = useState("");
   const [mensaje, setMensaje] = useState("");
 
-  const cargarUsuarios = useCallback(async () => {
-    setCargando(true);
-    setError("");
+  const {
+    data: usuarios = [],
+    isLoading: cargando,
+    isFetching,
+    isError,
+    error: errorConsulta,
+    refetch,
+  } = useQuery<UsuarioAdmin[], Error>({
+    queryKey: usuariosQueryKey,
+    queryFn: listarUsuarios,
+  });
 
-    try {
-      const respuesta = await api.get<UsuarioAdmin[]>("/usuarios/");
-      setUsuarios(respuesta.data);
-    } catch (err) {
-      if (axios.isAxiosError(err) && err.response?.status === 403) {
-        setError("No tenés permisos para administrar usuarios.");
-      } else {
-        setError("No se pudo cargar la lista de usuarios.");
-      }
-    } finally {
-      setCargando(false);
-    }
-  }, []);
+  const estadoMutation = useMutation({
+    mutationFn: modificarEstado,
 
-  useEffect(() => {
-    void cargarUsuarios();
-  }, [cargarUsuarios]);
+    onSuccess: async (_, usuario) => {
+      const accion = usuario.disabled ? "activó" : "desactivó";
 
-  async function cambiarEstado(usuario: UsuarioAdmin) {
-    const activar = usuario.disabled;
-    const accion = activar ? "activar" : "desactivar";
+      setMensaje(
+        `La cuenta de ${usuario.full_name} se ${accion} correctamente.`
+      );
+
+      await queryClient.invalidateQueries({
+        queryKey: usuariosQueryKey,
+      });
+    },
+
+    onError: (error) => {
+      setErrorAccion(obtenerMensajeError(error));
+    },
+  });
+
+  const procesandoId = estadoMutation.isPending
+    ? estadoMutation.variables?.id ?? null
+    : null;
+
+  const error = errorAccion ||
+    (isError
+      ? obtenerMensajeError(errorConsulta)
+      : "");
+
+  function cambiarEstado(usuario: UsuarioAdmin) {
+    const accion = usuario.disabled ? "activar" : "desactivar";
 
     if (
       !window.confirm(
@@ -54,35 +105,9 @@ export default function AdminUsersPage() {
       return;
     }
 
-    setProcesandoId(usuario.id);
-    setError("");
+    setErrorAccion("");
     setMensaje("");
-
-    try {
-      await api.patch(`/usuarios/${usuario.id}/estado`, {
-        disabled: !activar,
-      });
-
-      setMensaje(
-        `La cuenta de ${usuario.full_name} se ${
-          activar ? "activó" : "desactivó"
-        } correctamente.`
-      );
-
-      await cargarUsuarios();
-    } catch (err) {
-      const detalle = axios.isAxiosError(err)
-        ? err.response?.data?.detail
-        : null;
-
-      setError(
-        typeof detalle === "string"
-          ? detalle
-          : "No se pudo modificar el estado del usuario."
-      );
-    } finally {
-      setProcesandoId(null);
-    }
+    estadoMutation.mutate(usuario);
   }
 
   return (
@@ -99,11 +124,14 @@ export default function AdminUsersPage() {
 
         <button
           type="button"
-          onClick={() => void cargarUsuarios()}
-          disabled={cargando || procesandoId !== null}
+          onClick={() => {
+            setErrorAccion("");
+            void refetch();
+          }}
+          disabled={isFetching || estadoMutation.isPending}
           className="rounded-lg bg-blue-600 px-4 py-2 font-semibold text-white disabled:opacity-50"
         >
-          Actualizar lista
+          {isFetching ? "Actualizando..." : "Actualizar lista"}
         </button>
       </div>
 
@@ -135,9 +163,13 @@ export default function AdminUsersPage() {
                 <th className="p-3">Acciones</th>
               </tr>
             </thead>
+
             <tbody className="bg-white text-slate-900 dark:!bg-slate-800 dark:!text-white">
               {usuarios.map((usuario) => (
-                <tr key={usuario.id} className="border-t border-slate-300 dark:!border-slate-600">
+                <tr
+                  key={usuario.id}
+                  className="border-t border-slate-300 dark:!border-slate-600"
+                >
                   <td className="p-3">{usuario.id}</td>
                   <td className="p-3">{usuario.username}</td>
                   <td className="p-3">{usuario.full_name}</td>
@@ -149,8 +181,8 @@ export default function AdminUsersPage() {
                   <td className="p-3">
                     <button
                       type="button"
-                      disabled={procesandoId !== null}
-                      onClick={() => void cambiarEstado(usuario)}
+                      disabled={estadoMutation.isPending}
+                      onClick={() => cambiarEstado(usuario)}
                       className={`rounded-lg px-3 py-2 text-white disabled:opacity-50 ${
                         usuario.disabled
                           ? "bg-green-600"
@@ -169,7 +201,7 @@ export default function AdminUsersPage() {
             </tbody>
           </table>
 
-          {usuarios.length === 0 && (
+          {usuarios.length === 0 && !isError && (
             <p className="p-5">No hay usuarios registrados.</p>
           )}
         </div>

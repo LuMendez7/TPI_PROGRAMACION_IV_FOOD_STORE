@@ -1,5 +1,6 @@
 
 from datetime import datetime, timezone
+from zoneinfo import ZoneInfo
 
 from fastapi import HTTPException
 from sqlmodel import select
@@ -247,14 +248,34 @@ class PedidoService:
             ]
 
 
-    def listar_paginados(self, pagina: int = 1, limite: int = 10):
+    def listar_paginados(
+        self,
+        pagina: int = 1,
+        limite: int = 10,
+        estado: str | None = None,
+    ):
         with self.uow as uow:
-            total = uow.session.exec(
-                select(func.count()).select_from(Pedido)
-            ).one()
+            consulta = select(Pedido)
+            consulta_total = select(func.count()).select_from(Pedido)
+
+            if estado is not None:
+                estado = estado.upper()
+
+                if estado not in ESTADOS_VALIDOS:
+                    raise HTTPException(
+                        status_code=422,
+                        detail="Estado de pedido inválido.",
+                    )
+
+                consulta = consulta.where(func.upper(Pedido.estado) == estado)
+                consulta_total = consulta_total.where(
+                    func.upper(Pedido.estado) == estado
+                )
+
+            total = uow.session.exec(consulta_total).one()
 
             statement = (
-                select(Pedido)
+                consulta
                 .order_by(Pedido.created_at.desc(), Pedido.id.desc())
                 .offset((pagina - 1) * limite)
                 .limit(limite)
@@ -280,6 +301,9 @@ class PedidoService:
         with self.uow as uow:
             pedidos = uow.session.exec(select(Pedido)).all()
 
+            zona_argentina = ZoneInfo("America/Argentina/Buenos_Aires")
+            hoy = datetime.now(zona_argentina).date()
+
             por_estado = {
                 "PENDIENTE": 0,
                 "EN_PREPARACION": 0,
@@ -288,6 +312,7 @@ class PedidoService:
             }
 
             total_vendido = 0.0
+            pedidos_hoy = 0
 
             for pedido in pedidos:
                 estado = pedido.estado.upper()
@@ -298,12 +323,26 @@ class PedidoService:
                 if estado == "ENTREGADO":
                     total_vendido += pedido.total
 
+                fecha_creacion = pedido.created_at
+
+                if fecha_creacion.tzinfo is None:
+                    fecha_creacion = fecha_creacion.replace(
+                        tzinfo=timezone.utc
+                    )
+
+                fecha_argentina = fecha_creacion.astimezone(
+                    zona_argentina
+                ).date()
+
+                if fecha_argentina == hoy:
+                    pedidos_hoy += 1
+
             return {
                 "total_pedidos": len(pedidos),
+                "pedidos_hoy": pedidos_hoy,
                 "por_estado": por_estado,
                 "total_vendido": round(total_vendido, 2),
             }
-
 
     def cambiar_estado(
         self,

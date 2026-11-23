@@ -86,7 +86,7 @@ Para ejecutar Food Store se necesita:
 
 - Python 3.12.
 - PostgreSQL instalado y en funcionamiento.
-- Node.js y pnpm.
+- Node.js y npm.
 - Una base de datos PostgreSQL creada para el proyecto.
 
 ## Instalación y ejecución del backend
@@ -109,13 +109,19 @@ Para ejecutar Food Store se necesita:
 
 5. Crear el archivo .env a partir de .env.example y configurar las variables correspondientes.
 
-6. Ejecutar el seed inicial:
+6. Crear las tablas de PostgreSQL en una base de datos nueva:
+
+    python create_tables.py
+
+   Este comando debe ejecutarse solamente durante la instalación inicial, antes de que existan las tablas del TPI.
+
+7. Ejecutar el seed inicial:
 
     python -m app.db.seed
 
-7. Iniciar la API:
+8. Iniciar la API:
 
-    uvicorn app.main:app
+    uvicorn app.main_tpi:app --reload
 
 La documentación interactiva estará disponible en:
 
@@ -171,15 +177,15 @@ La variable VITE_API_URL debe apuntar a la API:
 
 Instalar las dependencias:
 
-    pnpm install
+    npm install
 
 Verificar la compilación:
 
-    pnpm run build
+    npm run build
 
 Iniciar el frontend:
 
-    pnpm run dev
+    npm run dev
 
 La aplicación estará disponible normalmente en:
 
@@ -214,3 +220,23 @@ Se excluyen, entre otros:
 - Archivos temporales y respaldos innecesarios
 
 Los archivos .env.example deben conservarse.
+
+
+## Pruebas automatizadas
+
+El backend incluye pruebas automatizadas desarrolladas con pytest.
+
+Para ejecutarlas, ingresar a la carpeta backend, activar el entorno virtual e iniciar:
+
+    python -m pytest -v
+
+Resultado de la verificación final:
+
+- 17 pruebas aprobadas.
+- 0 pruebas fallidas.
+
+El frontend se verificó mediante:
+
+    npm run build
+
+La compilación finalizó correctamente.

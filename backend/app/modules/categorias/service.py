@@ -1,7 +1,11 @@
 
-from fastapi import HTTPException, status
 from sqlalchemy.exc import IntegrityError
 
+from app.modules.categorias.exceptions import (
+    CategoriaNoEncontradaError,
+    CategoriaDuplicadaError,
+    CategoriaNombreInvalidoError,
+)
 from app.modules.categorias.models import Categoria
 from app.modules.categorias.schemas import (
     CategoriaCrear,
@@ -27,9 +31,8 @@ class CategoriaService:
             categoria = uow.categorias.obtener_por_id(categoria_id)
 
             if categoria is None:
-                raise HTTPException(
-                    status_code=status.HTTP_404_NOT_FOUND,
-                    detail="Categoría no encontrada.",
+                raise CategoriaNoEncontradaError(
+                    "Categoría no encontrada."
                 )
 
             return categoria
@@ -42,9 +45,8 @@ class CategoriaService:
                 )
 
                 if existente:
-                    raise HTTPException(
-                        status_code=status.HTTP_409_CONFLICT,
-                        detail="Ya existe una categoría con ese nombre.",
+                    raise CategoriaDuplicadaError(
+                        "Ya existe una categoría con ese nombre."
                     )
 
                 categoria = Categoria(
@@ -57,11 +59,10 @@ class CategoriaService:
 
                 return categoria
 
-        except IntegrityError:
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail="Ya existe una categoría con ese nombre.",
-            )
+        except IntegrityError as exc:
+            raise CategoriaDuplicadaError(
+                "Ya existe una categoría con ese nombre."
+            ) from exc
 
     def actualizar(
         self,
@@ -75,9 +76,8 @@ class CategoriaService:
                 )
 
                 if categoria is None:
-                    raise HTTPException(
-                        status_code=status.HTTP_404_NOT_FOUND,
-                        detail="Categoría no encontrada.",
+                    raise CategoriaNoEncontradaError(
+                        "Categoría no encontrada."
                     )
 
                 cambios = datos.model_dump(exclude_unset=True)
@@ -86,9 +86,8 @@ class CategoriaService:
                     nuevo_nombre = cambios["nombre"]
 
                     if nuevo_nombre is None:
-                        raise HTTPException(
-                            status_code=422,
-                            detail="El nombre no puede ser nulo.",
+                        raise CategoriaNombreInvalidoError(
+                            "El nombre no puede ser nulo."
                         )
 
                     existente = uow.categorias.obtener_por_nombre(
@@ -96,9 +95,8 @@ class CategoriaService:
                     )
 
                     if existente and existente.id != categoria_id:
-                        raise HTTPException(
-                            status_code=status.HTTP_409_CONFLICT,
-                            detail="Ya existe una categoría con ese nombre.",
+                        raise CategoriaDuplicadaError(
+                            "Ya existe una categoría con ese nombre."
                         )
 
                 for campo, valor in cambios.items():
@@ -108,11 +106,10 @@ class CategoriaService:
 
                 return categoria
 
-        except IntegrityError:
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail="Ya existe una categoría con ese nombre.",
-            )
+        except IntegrityError as exc:
+            raise CategoriaDuplicadaError(
+                "Ya existe una categoría con ese nombre."
+            ) from exc
 
     def desactivar(self, categoria_id: int):
         with self.uow as uow:
@@ -121,9 +118,8 @@ class CategoriaService:
             )
 
             if categoria is None:
-                raise HTTPException(
-                    status_code=status.HTTP_404_NOT_FOUND,
-                    detail="Categoría no encontrada.",
+                raise CategoriaNoEncontradaError(
+                    "Categoría no encontrada."
                 )
 
             categoria.activo = False

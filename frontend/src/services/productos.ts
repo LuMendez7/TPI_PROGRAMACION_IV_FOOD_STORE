@@ -13,7 +13,36 @@ export interface Producto {
   activo: boolean;
 }
 
+interface ProductosPaginados {
+  total: number;
+  items: Producto[];
+}
+
 export async function listarProductos(): Promise<Producto[]> {
-  const respuesta = await api.get<Producto[]>("/productos/");
-  return respuesta.data;
+  const productos: Producto[] = [];
+  const limite = 100;
+  let skip = 0;
+
+  while (true) {
+    const respuesta = await api.get<ProductosPaginados>(
+      "/productos/paginados",
+      {
+        params: {
+          skip,
+          limit: limite,
+        },
+      }
+    );
+
+    const pagina = respuesta.data;
+
+    productos.push(...pagina.items);
+    skip += pagina.items.length;
+
+    if (pagina.items.length === 0 || skip >= pagina.total) {
+      break;
+    }
+  }
+
+  return productos;
 }

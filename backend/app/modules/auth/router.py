@@ -86,7 +86,7 @@ def login(
     return {"mensaje": "Sesión iniciada correctamente."}
 
 
-@router.post("/token", response_model=TokenRespuesta)
+@router.post("/token", response_model=MensajeRespuesta)
 def obtener_token(
     response: Response,
     request: Request,
@@ -94,17 +94,18 @@ def obtener_token(
     service: AuthService = Depends(obtener_servicio),
 ):
     comprobar_origen(request)
+
     usuario = service.autenticar(
         form_data.username,
         form_data.password,
     )
 
     token = service.generar_token(usuario)
+
     guardar_cookie(response, token)
 
     return {
-        "access_token": token,
-        "token_type": "bearer",
+        "mensaje": "Sesion iniciada correctamente."
     }
 
 

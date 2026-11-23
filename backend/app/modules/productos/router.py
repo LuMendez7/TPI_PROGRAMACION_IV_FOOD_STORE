@@ -1,11 +1,18 @@
 
-from fastapi import APIRouter, Depends, Query, status
+from fastapi import APIRouter, Depends, Query, HTTPException, status
 
 from app.core.deps import requerir_admin
+from app.modules.productos.exceptions import (
+    ProductoNoEncontradoError,
+    CategoriaProductoNoValidaError,
+    ProductoDatoInvalidoError,
+)
 from app.modules.productos.schemas import (
     ProductoCrear,
     ProductoActualizar,
     ProductoLeer,
+    ProductosPaginados,
+    ProductoStockActualizar,
 )
 from app.modules.productos.service import ProductoService
 
@@ -20,15 +27,72 @@ def obtener_servicio():
     return ProductoService()
 
 
+def traducir_error_producto(exc: Exception):
+    if isinstance(exc, ProductoNoEncontradoError):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(exc),
+        ) from exc
+
+    if isinstance(exc, CategoriaProductoNoValidaError):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(exc),
+        ) from exc
+
+    if isinstance(exc, ProductoDatoInvalidoError):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=str(exc),
+        ) from exc
+
+    raise exc
+
+
 @router.get(
-    "/",
-    response_model=list[ProductoLeer],
+    "/paginados",
+    response_model=ProductosPaginados,
 )
-def listar_productos(
+def listar_productos_paginados(
+    skip: int = Query(default=0, ge=0),
+    limit: int = Query(default=10, ge=1, le=100),
+    buscar: str | None = Query(default=None),
+    categoria_id: int | None = Query(default=None, gt=0),
+    disponible: bool | None = Query(default=None),
     solo_activos: bool = Query(default=True),
     service: ProductoService = Depends(obtener_servicio),
 ):
-    return service.listar(solo_activos=solo_activos)
+    return service.listar_paginados(
+        skip=skip,
+        limit=limit,
+        buscar=buscar,
+        categoria_id=categoria_id,
+        disponible=disponible,
+        solo_activos=solo_activos,
+    )
+
+
+@router.get(
+    "/",
+    response_model=ProductosPaginados,
+)
+def listar_productos(
+    skip: int = Query(default=0, ge=0),
+    limit: int = Query(default=10, ge=1, le=100),
+    buscar: str | None = Query(default=None),
+    categoria_id: int | None = Query(default=None, gt=0),
+    disponible: bool | None = Query(default=None),
+    solo_activos: bool = Query(default=True),
+    service: ProductoService = Depends(obtener_servicio),
+):
+    return service.listar_paginados(
+        skip=skip,
+        limit=limit,
+        buscar=buscar,
+        categoria_id=categoria_id,
+        disponible=disponible,
+        solo_activos=solo_activos,
+    )
 
 
 @router.get(
@@ -39,7 +103,10 @@ def obtener_producto(
     producto_id: int,
     service: ProductoService = Depends(obtener_servicio),
 ):
-    return service.obtener(producto_id)
+    try:
+        return service.obtener(producto_id)
+    except ProductoNoEncontradoError as exc:
+        traducir_error_producto(exc)
 
 
 @router.post(
@@ -52,7 +119,10 @@ def crear_producto(
     datos: ProductoCrear,
     service: ProductoService = Depends(obtener_servicio),
 ):
-    return service.crear(datos)
+    try:
+        return service.crear(datos)
+    except CategoriaProductoNoValidaError as exc:
+        traducir_error_producto(exc)
 
 
 @router.put(
@@ -65,7 +135,14 @@ def actualizar_producto(
     datos: ProductoActualizar,
     service: ProductoService = Depends(obtener_servicio),
 ):
-    return service.actualizar(producto_id, datos)
+    try:
+        return service.actualizar(producto_id, datos)
+    except (
+        ProductoNoEncontradoError,
+        CategoriaProductoNoValidaError,
+        ProductoDatoInvalidoError,
+    ) as exc:
+        traducir_error_producto(exc)
 
 
 @router.delete(
@@ -77,4 +154,29 @@ def desactivar_producto(
     producto_id: int,
     service: ProductoService = Depends(obtener_servicio),
 ):
-    service.desactivar(producto_id)
+    try:
+        service.desactivar(producto_id)
+    except ProductoNoEncontradoError as exc:
+        traducir_error_producto(exc)
+
+
+@router.patch(
+    "/{producto_id}/stock",
+    response_model=ProductoLeer,
+    dependencies=[Depends(requerir_admin)],
+)
+def actualizar_stock_producto(
+    producto_id: int,
+    datos: ProductoStockActualizar,
+    service: ProductoService = Depends(obtener_servicio),
+):
+    try:
+        return service.actualizar(
+            producto_id,
+            ProductoActualizar(stock=datos.stock),
+        )
+    except (
+        ProductoNoEncontradoError,
+        ProductoDatoInvalidoError,
+    ) as exc:
+        traducir_error_producto(exc)

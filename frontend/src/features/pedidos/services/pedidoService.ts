@@ -110,12 +110,19 @@ export interface PedidosPaginados {
 
 export async function listarPedidosPaginados(
   pagina: number = 1,
-  limite: number = 10
+  limite: number = 10,
+  estado?: string
 ): Promise<PedidosPaginados> {
   try {
     const respuesta = await api.get<PedidosPaginados>(
       "/pedidos/",
-      { params: { pagina, limite } }
+      {
+        params: {
+          pagina,
+          limite,
+          ...(estado ? { estado } : {}),
+        },
+      }
     );
 
     return respuesta.data;

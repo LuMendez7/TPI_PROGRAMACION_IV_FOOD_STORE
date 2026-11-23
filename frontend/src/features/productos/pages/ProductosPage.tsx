@@ -3,12 +3,15 @@ import "../../../styles/ajustesTablas.css";
 import type { FormEvent } from "react";
 
 import { useAuthStore } from "../../../stores/authStore";
+import { useCategories } from "../../categorias/hooks/useCategories";
+import ProductoTable from "../components/ProductoTable";
 
 import {
   useProducts,
   useCreateProduct,
   useUpdateProduct,
   useDeleteProduct,
+  useUpdateProductStock,
 } from "../hooks/useProducts";
 
 import type {
@@ -30,6 +33,12 @@ export default function ProductosPage() {
   const usuario = useAuthStore((state) => state.usuario);
   const esAdmin = usuario?.rol === "ADMIN";
 
+  const {
+    data: categorias = [],
+    isLoading: cargandoCategorias,
+    isError: errorCategorias,
+  } = useCategories();
+
   // Consulta mediante hook personalizado
   const {
     data: productos = [],
@@ -41,6 +50,7 @@ export default function ProductosPage() {
   const crearMutation = useCreateProduct();
   const actualizarMutation = useUpdateProduct();
   const eliminarMutation = useDeleteProduct();
+  const stockMutation = useUpdateProductStock();
 
   const guardando =
     crearMutation.isPending || actualizarMutation.isPending;
@@ -181,6 +191,31 @@ export default function ProductosPage() {
     }
   }
 
+  async function cambiarStock(producto: Producto) {
+    if (!esAdmin) return;
+
+    const entrada = window.prompt(
+      `Nuevo stock para "${producto.nombre}" (actual: ${producto.stock}):`,
+      String(producto.stock)
+    );
+
+    if (entrada === null) return;
+    const valor = entrada.trim();
+    const nuevoStock = Number(valor);
+
+    if (valor === "" || !Number.isSafeInteger(nuevoStock) || nuevoStock < 0) {
+      setError("El stock debe ser un número entero igual o mayor que cero.");
+      return;
+    }
+
+    try {
+      setError("");
+      await stockMutation.mutateAsync({ id: producto.id, stock: nuevoStock });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Error al actualizar el stock.");
+    }
+  }
+
   // Estilos exclusivos de los campos del formulario
   const campo =
     "w-full rounded-lg border border-slate-300 bg-white p-2 text-slate-900 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 dark:!border-slate-500 dark:!bg-slate-700 dark:!text-white dark:placeholder:text-slate-400 dark:focus:border-blue-400";
@@ -241,6 +276,36 @@ export default function ProductosPage() {
           </label>
 
           <label className={etiqueta}>
+            Categoría
+            <select
+              className={campo}
+              required
+              value={formulario.categoria_id}
+              disabled={cargandoCategorias || errorCategorias}
+              onChange={(e) =>
+                setFormulario({
+                  ...formulario,
+                  categoria_id: Number(e.target.value),
+                })
+              }
+            >
+              <option value={0}>Seleccioná una categoría</option>
+
+              {categorias.map((categoria) => (
+                <option key={categoria.id} value={categoria.id}>
+                  {categoria.nombre}
+                </option>
+              ))}
+            </select>
+
+            {errorCategorias && (
+              <p className="mt-2 text-sm text-red-600">
+                No se pudieron cargar las categorías.
+              </p>
+            )}
+          </label>
+
+          <label className={etiqueta}>
             Descripción
             <textarea
               className={campo}
@@ -290,22 +355,7 @@ export default function ProductosPage() {
             />
           </label>
 
-          <label className={etiqueta}>
-            ID de categoría
-            <input
-              className={campo}
-              type="number"
-              min="1"
-              required
-              value={formulario.categoria_id}
-              onChange={(e) =>
-                setFormulario({
-                  ...formulario,
-                  categoria_id: Number(e.target.value),
-                })
-              }
-            />
-          </label>
+
 
           <label className={etiqueta}>
             IDs de ingredientes (separados por comas)
@@ -362,83 +412,15 @@ export default function ProductosPage() {
       ) : errorConsulta ? null : productos.length === 0 ? (
         <p>No hay productos registrados.</p>
       ) : (
-        <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white text-slate-900 shadow-sm dark:!border-slate-600 dark:!bg-slate-800 dark:!text-white">
-          <table className="foodstore-productos-tabla w-full border-collapse text-left">
-            <thead className="bg-slate-800 text-white dark:!bg-slate-700">
-              <tr>
-                <th className="p-3">ID</th>
-                <th className="p-3">Nombre</th>
-                <th className="p-3">Precio</th>
-                <th className="p-3">Categoría</th>
-                <th className="p-3">Stock</th>
-                <th className="p-3">Disponible</th>
-                {esAdmin && (
-                  <th className="p-3">Acciones</th>
-                )}
-              </tr>
-            </thead>
-
-            <tbody className="bg-white text-slate-900 dark:!bg-slate-800 dark:!text-white">
-              {productos.map((producto) => (
-                <tr
-                  key={producto.id}
-                  className="border-t border-slate-200 dark:!border-slate-600"
-                >
-                  <td className="p-3">
-                    {producto.id}
-                  </td>
-                  <td className="p-3">
-                    {producto.nombre}
-                  </td>
-                  <td className="p-3">
-                    {producto.precio_base.toLocaleString("es-AR", {
-                      style: "currency",
-                      currency: "ARS",
-                      minimumFractionDigits: 2,
-                      maximumFractionDigits: 2,
-                    })}
-                  </td>
-                  <td className="p-3">
-                    {producto.categoria_id}
-                  </td>
-                  <td className="p-3">
-                    {producto.stock}
-                  </td>
-                  <td className="p-3">
-                    {producto.disponible
-                      ? "Sí"
-                      : "No"}
-                  </td>
-
-                  {esAdmin && (
-                    <td className="p-3">
-                      <div className="flex gap-2">
-                        <button
-                          onClick={() =>
-                            editarProducto(producto)
-                          }
-                          className="rounded bg-yellow-500 px-3 py-1 text-white"
-                        >
-                          Editar
-                        </button>
-
-                        <button
-                          onClick={() =>
-                            void borrarProducto(producto)
-                          }
-                          disabled={eliminarMutation.isPending}
-                          className="rounded bg-red-600 px-3 py-1 text-white disabled:opacity-50"
-                        >
-                          Eliminar
-                        </button>
-                      </div>
-                    </td>
-                  )}
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <ProductoTable
+          productos={productos}
+          esAdmin={esAdmin}
+          eliminando={eliminarMutation.isPending}
+          actualizandoStock={stockMutation.isPending}
+          onActualizarStock={(producto) => void cambiarStock(producto)}
+          onEditar={editarProducto}
+          onEliminar={(producto) => void borrarProducto(producto)}
+        />
       )}
     </section>
   );

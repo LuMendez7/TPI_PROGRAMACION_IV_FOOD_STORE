@@ -1,7 +1,12 @@
 
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, HTTPException, status
 
 from app.core.deps import requerir_admin
+from app.modules.categorias.exceptions import (
+    CategoriaNoEncontradaError,
+    CategoriaDuplicadaError,
+    CategoriaNombreInvalidoError,
+)
 from app.modules.categorias.schemas import (
     CategoriaCrear,
     CategoriaActualizar,
@@ -18,6 +23,28 @@ router = APIRouter(
 
 def obtener_servicio():
     return CategoriaService()
+
+
+def traducir_error_categoria(exc: Exception):
+    if isinstance(exc, CategoriaNoEncontradaError):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(exc),
+        ) from exc
+
+    if isinstance(exc, CategoriaDuplicadaError):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=str(exc),
+        ) from exc
+
+    if isinstance(exc, CategoriaNombreInvalidoError):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=str(exc),
+        ) from exc
+
+    raise exc
 
 
 @router.get(
@@ -38,7 +65,10 @@ def obtener_categoria(
     categoria_id: int,
     service: CategoriaService = Depends(obtener_servicio),
 ):
-    return service.obtener(categoria_id)
+    try:
+        return service.obtener(categoria_id)
+    except CategoriaNoEncontradaError as exc:
+        traducir_error_categoria(exc)
 
 
 @router.post(
@@ -51,7 +81,10 @@ def crear_categoria(
     datos: CategoriaCrear,
     service: CategoriaService = Depends(obtener_servicio),
 ):
-    return service.crear(datos)
+    try:
+        return service.crear(datos)
+    except CategoriaDuplicadaError as exc:
+        traducir_error_categoria(exc)
 
 
 @router.put(
@@ -64,7 +97,14 @@ def actualizar_categoria(
     datos: CategoriaActualizar,
     service: CategoriaService = Depends(obtener_servicio),
 ):
-    return service.actualizar(categoria_id, datos)
+    try:
+        return service.actualizar(categoria_id, datos)
+    except (
+        CategoriaNoEncontradaError,
+        CategoriaDuplicadaError,
+        CategoriaNombreInvalidoError,
+    ) as exc:
+        traducir_error_categoria(exc)
 
 
 @router.delete(
@@ -76,4 +116,7 @@ def desactivar_categoria(
     categoria_id: int,
     service: CategoriaService = Depends(obtener_servicio),
 ):
-    service.desactivar(categoria_id)
+    try:
+        service.desactivar(categoria_id)
+    except CategoriaNoEncontradaError as exc:
+        traducir_error_categoria(exc)

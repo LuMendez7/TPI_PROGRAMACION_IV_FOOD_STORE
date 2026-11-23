@@ -4,6 +4,7 @@ import { api } from "@/api/axios";
 
 interface ResumenPedidos {
   total_pedidos: number;
+  pedidos_hoy: number;
   total_vendido: number;
   por_estado: Record<string, number>;
 }
@@ -65,6 +66,13 @@ export default function ResumenPedidosPage() {
           <h2 className="text-sm font-medium">Total de pedidos</h2>
           <p className="mt-2 text-3xl font-bold">
             {data.total_pedidos}
+          </p>
+        </article>
+
+        <article className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-600 dark:bg-slate-800">
+          <h2 className="text-sm font-medium">Pedidos de hoy</h2>
+          <p className="mt-2 text-3xl font-bold">
+            {data.pedidos_hoy}
           </p>
         </article>
 

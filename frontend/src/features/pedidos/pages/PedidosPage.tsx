@@ -54,10 +54,9 @@ function etiquetaEstado(estado: string) {
 
   return (
     <span
-      className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold ${
-        estilos[estadoNormalizado] ??
+      className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold ${estilos[estadoNormalizado] ??
         "bg-slate-100 text-slate-800 dark:!bg-slate-700 dark:!text-white"
-      }`}
+        }`}
     >
       {estadoNormalizado.replaceAll("_", " ")}
     </span>
@@ -75,16 +74,21 @@ export default function PedidosPage() {
   const [error, setError] = useState("");
   const [mensaje, setMensaje] = useState("");
   const [pagina, setPagina] = useState(1);
+  const [filtroEstado, setFiltroEstado] = useState("");
 
   const {
     data: resultadoPedidos,
     isLoading,
     isError,
   } = useQuery({
-    queryKey: ["pedidos", esAdmin, pagina],
+    queryKey: ["pedidos", esAdmin, pagina, filtroEstado],
     queryFn: async () => {
       if (esAdmin) {
-        return await listarPedidosPaginados(pagina, 10);
+        return await listarPedidosPaginados(
+          pagina,
+          10,
+          filtroEstado || undefined
+        );
       }
 
       const pedidos = await listarPedidos(false);
@@ -407,6 +411,34 @@ export default function PedidosPage() {
         </form>
       )}
 
+      {esAdmin && (
+        <div className="flex flex-wrap items-center gap-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-600 dark:bg-slate-800">
+          <label
+            htmlFor="filtro-estado-pedidos"
+            className="text-sm font-semibold"
+          >
+            Filtrar pedidos por estado:
+          </label>
+
+          <select
+            id="filtro-estado-pedidos"
+            className={`${campo} !mt-0 max-w-xs`}
+            value={filtroEstado}
+            onChange={(e) => {
+              setFiltroEstado(e.target.value);
+              setPagina(1);
+              setDetallesAbiertos([]);
+            }}
+          >
+            <option value="">Todos los pedidos</option>
+            <option value="PENDIENTE">Pendientes</option>
+            <option value="EN_PREPARACION">En preparación</option>
+            <option value="ENTREGADO">Entregados</option>
+            <option value="CANCELADO">Cancelados</option>
+          </select>
+        </div>
+      )}
+
       {isLoading && <p>Cargando pedidos...</p>}
       {isError && (
         <p role="alert" className="text-red-600 dark:!text-red-300">
@@ -538,9 +570,9 @@ export default function PedidosPage() {
                                     <select
                                       id={`estado-${pedido.id}`}
                                       className={`${campo} !mt-0 max-w-xs`}
-                                    value=""
-                                    disabled={estadoMutation.isPending}
-                                    onChange={(e) => actualizarEstado(pedido.id, e.target.value)}
+                                      value=""
+                                      disabled={estadoMutation.isPending}
+                                      onChange={(e) => actualizarEstado(pedido.id, e.target.value)}
                                     >
                                       <option value="" disabled>
                                         Seleccionar nuevo estado

@@ -11,6 +11,7 @@ import {
   crearProducto,
   actualizarProducto,
   eliminarProducto,
+  actualizarStockProducto,
 } from "../services/productoService";
 
 import type {
@@ -86,6 +87,46 @@ export function useDeleteProduct() {
     },
     onError: () => {
       useNotificationStore.getState().showNotification("No se pudo completar la operación.", "error");
+    },
+  });
+}
+
+export function useUpdateProductStock() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({
+      id,
+      stock,
+    }: {
+      id: number;
+      stock: number;
+    }) => actualizarStockProducto(id, stock),
+
+    onSuccess: () => {
+      useNotificationStore
+        .getState()
+        .showNotification(
+          "Stock actualizado correctamente.",
+          "success"
+        );
+
+      void queryClient.invalidateQueries({
+        queryKey: productsQueryKey,
+      });
+
+      void queryClient.invalidateQueries({
+        queryKey: ["catalogo", "productos"],
+      });
+    },
+
+    onError: () => {
+      useNotificationStore
+        .getState()
+        .showNotification(
+          "No se pudo actualizar el stock.",
+          "error"
+        );
     },
   });
 }

@@ -63,3 +63,11 @@ class ProductoLeer(SQLModel):
     stock: int
     disponible: bool
     activo: bool
+
+class ProductoStockActualizar(SQLModel):
+    stock: int = Field(ge=0)
+
+
+class ProductosPaginados(SQLModel):
+    total: int
+    items: list[ProductoLeer]

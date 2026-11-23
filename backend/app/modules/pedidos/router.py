@@ -57,12 +57,14 @@ def listar_todos(
 def listar_pedidos_paginados(
     pagina: int = Query(default=1, ge=1),
     limite: int = Query(default=10, ge=1, le=100),
+    estado: str | None = Query(default=None),
     admin: Usuario = Depends(requerir_admin),
     service: PedidoService = Depends(obtener_servicio),
 ):
     return service.listar_paginados(
         pagina=pagina,
         limite=limite,
+        estado=estado,
     )
 
 

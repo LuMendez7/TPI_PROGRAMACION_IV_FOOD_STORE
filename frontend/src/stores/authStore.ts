@@ -1,7 +1,7 @@
 
 import axios from "axios";
 import { create } from "zustand";
-
+import { persist } from "zustand/middleware";
 import { api } from "../api/axios";
 
 export type RolUsuario = "admin" | "user";
@@ -54,7 +54,9 @@ interface AuthState {
   limpiarError: () => void;
 }
 
-export const useAuthStore = create<AuthState>()((set) => ({
+export const useAuthStore = create<AuthState>()(
+  persist(
+    (set) => ({
   usuario: null,
   cargando: false,
   inicializado: false,
@@ -64,9 +66,15 @@ export const useAuthStore = create<AuthState>()((set) => ({
     set({ cargando: true, error: null });
 
     try {
-      await api.post("/auth/login", {
-        username,
-        password,
+      const datosFormulario = new URLSearchParams();
+
+      datosFormulario.set("username", username);
+      datosFormulario.set("password", password);
+
+      await api.post("/auth/token", datosFormulario, {
+        headers: {
+          "Content-Type": "application/x-www-form-urlencoded",
+        },
       });
 
       const respuesta = await api.get<UsuarioAPI>("/auth/me");
@@ -156,5 +164,13 @@ export const useAuthStore = create<AuthState>()((set) => ({
     }
   },
 
-  limpiarError: () => set({ error: null }),
-}));
+      limpiarError: () => set({ error: null }),
+    }),
+    {
+      name: "foodstore-auth",
+      partialize: (state) => ({
+        usuario: state.usuario,
+      }),
+    }
+  )
+);

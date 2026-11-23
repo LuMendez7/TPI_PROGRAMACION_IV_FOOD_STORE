@@ -21,8 +21,17 @@ def test_health():
 
 def test_catalogo_publico():
     respuesta = client.get("/api/v1/productos/")
+
     assert respuesta.status_code == 200
-    assert isinstance(respuesta.json(), list)
+
+    datos = respuesta.json()
+
+    assert isinstance(datos, dict)
+    assert "total" in datos
+    assert "items" in datos
+    assert isinstance(datos["total"], int)
+    assert isinstance(datos["items"], list)
+    assert datos["total"] >= len(datos["items"])
 
 
 def test_categorias_publicas():

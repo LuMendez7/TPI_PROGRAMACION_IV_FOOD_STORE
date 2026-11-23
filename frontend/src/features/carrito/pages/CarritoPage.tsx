@@ -1,6 +1,7 @@
-import { useState, type FormEvent } from "react";
+import { useState } from "react";
+import { useForm } from "@tanstack/react-form";
 import { Link } from "react-router-dom";
-import { useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 
 import {
   useCarritoStore,
@@ -33,6 +34,10 @@ function imagenDeProducto(nombre: string): string | null {
 export default function CarritoPage() {
   const queryClient = useQueryClient();
 
+  const crearPedidoMutation = useMutation({
+    mutationFn: crearPedido,
+  });
+
   const items = useCarritoStore((state) => state.items);
   const quitarProducto = useCarritoStore(
     (state) => state.quitarProducto
@@ -44,9 +49,16 @@ export default function CarritoPage() {
     (state) => state.vaciarCarrito
   );
 
-  const [formaPago, setFormaPago] = useState("EFECTIVO");
-  const [direccionEntrega, setDireccionEntrega] = useState("");
-  const [notas, setNotas] = useState("");
+  const form = useForm({
+    defaultValues: {
+      formaPago: "EFECTIVO",
+      direccionEntrega: "",
+      notas: "",
+    },
+    onSubmit: async ({ value }) => {
+      await confirmarPedido(value);
+    },
+  });
 
   const [procesando, setProcesando] = useState(false);
   const [error, setError] = useState("");
@@ -64,10 +76,14 @@ export default function CarritoPage() {
   const campo =
     "mt-2 w-full rounded-lg border border-slate-300 bg-white px-4 py-3 text-slate-900 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200 dark:!border-slate-500 dark:!bg-slate-700 dark:!text-white dark:focus:!ring-blue-900";
 
-  async function confirmarPedido(evento: FormEvent<HTMLFormElement>) {
-    evento.preventDefault();
-
-    if (procesando) return;
+  async function confirmarPedido(
+    valores: {
+      formaPago: string;
+      direccionEntrega: string;
+      notas: string;
+    }
+  ) {
+    if (procesando || crearPedidoMutation.isPending) return;
 
     setError("");
     setMensaje("");
@@ -77,68 +93,64 @@ export default function CarritoPage() {
       return;
     }
 
-    if (!direccionEntrega.trim()) {
+    if (!valores.direccionEntrega.trim()) {
       setError("Ingresá una dirección de entrega.");
       return;
     }
 
-    const cantidadesValidas = items.every(
-      (item) =>
-        Number.isInteger(item.cantidad) &&
-        item.cantidad > 0 &&
-        item.cantidad <= item.stock
+  const cantidadesValidas = items.every(
+    (item) =>
+      Number.isInteger(item.cantidad) &&
+      item.cantidad > 0 &&
+      item.cantidad <= item.stock
+  );
+
+  if (!cantidadesValidas) {
+    setError(
+      "Revisá las cantidades. No pueden superar el stock disponible."
+    );
+    return;
+  }
+
+  const datos: PedidoCreate = {
+    forma_pago: valores.formaPago,
+    direccion_entrega: valores.direccionEntrega.trim(),
+    notas: valores.notas.trim(),
+    items: items.map((item) => ({
+      producto_id: item.producto_id,
+      cantidad: item.cantidad,
+    })),
+  };
+
+  setProcesando(true);
+
+  try {
+    const pedido = await crearPedidoMutation.mutateAsync(datos);
+
+    vaciarCarrito();
+    form.reset();
+
+    setMensaje(
+      `¡Pedido #${pedido.id} confirmado correctamente! Total: ${formatearPrecio(pedido.total)}.`
     );
 
-    if (!cantidadesValidas) {
-      setError(
-        "Revisá las cantidades. No pueden superar el stock disponible."
-      );
-      return;
-    }
-
-    const datos: PedidoCreate = {
-      forma_pago: formaPago,
-      direccion_entrega: direccionEntrega.trim(),
-      notas: notas.trim(),
-      items: items.map((item) => ({
-        producto_id: item.producto_id,
-        cantidad: item.cantidad,
-      })),
-    };
-
-    setProcesando(true);
-
-    try {
-      const pedido = await crearPedido(datos);
-
-      vaciarCarrito();
-
-      setDireccionEntrega("");
-      setNotas("");
-      setFormaPago("EFECTIVO");
-
-      setMensaje(
-        `¡Pedido #${pedido.id} confirmado correctamente! Total: ${formatearPrecio(pedido.total)}.`
-      );
-
-      await Promise.allSettled([
-        queryClient.invalidateQueries({
-          queryKey: ["pedidos"],
-        }),
-        queryClient.invalidateQueries({
-          queryKey: ["productos"],
-        }),
-      ]);
-    } catch (errorDesconocido) {
-      setError(
-        errorDesconocido instanceof Error
-          ? errorDesconocido.message
-          : "No se pudo confirmar el pedido."
-      );
-    } finally {
-      setProcesando(false);
-    }
+    await Promise.allSettled([
+      queryClient.invalidateQueries({ queryKey: ["pedidos"] }),
+      queryClient.invalidateQueries({ queryKey: ["productos"] }),
+      queryClient.invalidateQueries({
+        queryKey: ["catalogo", "productos"],
+      }),
+    ]);
+  } catch (errorDesconocido) {
+    setError(
+      errorDesconocido instanceof Error
+        ? errorDesconocido.message
+        : "No se pudo confirmar el pedido."
+    );
+  } finally {
+    setProcesando(false);
   }
+}
 
   return (
     <main className="min-h-screen bg-slate-50 p-6 text-slate-900 dark:!bg-slate-900 dark:!text-white">
@@ -326,7 +338,11 @@ export default function CarritoPage() {
             </div>
 
             <form
-              onSubmit={confirmarPedido}
+              onSubmit={(evento) => {
+                evento.preventDefault();
+                evento.stopPropagation();
+                void form.handleSubmit();
+              }}
               className="space-y-5 rounded-xl border border-slate-200 bg-white p-6 dark:!border-slate-600 dark:!bg-slate-800"
             >
               <div>
@@ -347,18 +363,22 @@ export default function CarritoPage() {
                   Forma de pago
                 </label>
 
-                <select
-                  id="forma-pago"
-                  value={formaPago}
-                  onChange={(evento) =>
-                    setFormaPago(evento.target.value)
-                  }
-                  disabled={procesando}
-                  className={campo}
-                >
-                  <option value="EFECTIVO">Efectivo</option>
-                  <option value="TRANSFERENCIA">Transferencia</option>
-                </select>
+                <form.Field name="formaPago">
+                  {(field) => (
+                    <select
+                      id="forma-pago"
+                      name={field.name}
+                      value={field.state.value}
+                      onBlur={field.handleBlur}
+                      onChange={(evento) => field.handleChange(evento.target.value)}
+                      disabled={procesando}
+                      className={campo}
+                    >
+                      <option value="EFECTIVO">Efectivo</option>
+                      <option value="TRANSFERENCIA">Transferencia</option>
+                    </select>
+                  )}
+                </form.Field>
               </div>
 
               <div>
@@ -369,19 +389,39 @@ export default function CarritoPage() {
                   Dirección de entrega *
                 </label>
 
-                <input
-                  id="direccion-entrega"
-                  type="text"
-                  required
-                  maxLength={250}
-                  placeholder="Ej.: Calle 123, San Nicolás"
-                  value={direccionEntrega}
-                  onChange={(evento) =>
-                    setDireccionEntrega(evento.target.value)
-                  }
-                  disabled={procesando}
-                  className={campo}
-                />
+                <form.Field
+                  name="direccionEntrega"
+                  validators={{
+                    onChange: ({ value }) =>
+                      value.trim()
+                        ? undefined
+                        : "Ingresá una dirección de entrega.",
+                  }}
+                >
+                  {(field) => (
+                    <>
+                      <input
+                        id="direccion-entrega"
+                        name={field.name}
+                        type="text"
+                        required
+                        maxLength={250}
+                        placeholder="Ej.: Calle 123, San Nicolás"
+                        value={field.state.value}
+                        onBlur={field.handleBlur}
+                        onChange={(evento) => field.handleChange(evento.target.value)}
+                        disabled={procesando}
+                        className={campo}
+                      />
+                      {field.state.meta.isTouched &&
+                        field.state.meta.errors.length > 0 && (
+                          <p className="mt-2 text-sm text-red-600">
+                            {field.state.meta.errors.join(", ")}
+                          </p>
+                        )}
+                    </>
+                  )}
+                </form.Field>
               </div>
 
               <div>
@@ -392,17 +432,21 @@ export default function CarritoPage() {
                   Notas adicionales (opcional)
                 </label>
 
-                <textarea
-                  id="notas-pedido"
-                  rows={3}
-                  placeholder="Ej.: Sin cebolla, tocar timbre..."
-                  value={notas}
-                  onChange={(evento) =>
-                    setNotas(evento.target.value)
-                  }
-                  disabled={procesando}
-                  className={campo}
-                />
+                <form.Field name="notas">
+                  {(field) => (
+                    <textarea
+                      id="notas-pedido"
+                      name={field.name}
+                      rows={3}
+                      placeholder="Ej.: Sin cebolla, tocar timbre..."
+                      value={field.state.value}
+                      onBlur={field.handleBlur}
+                      onChange={(evento) => field.handleChange(evento.target.value)}
+                      disabled={procesando}
+                      className={campo}
+                    />
+                  )}
+                </form.Field>
               </div>
 
               <div className="flex flex-wrap items-center justify-between gap-4 border-t border-slate-200 pt-5 dark:!border-slate-600">

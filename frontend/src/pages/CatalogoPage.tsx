@@ -1,4 +1,5 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import { listarProductos, type Producto } from "../services/productos";
 import { useCarritoStore, calcularCantidadCarrito } from "../store/carritoStore";
@@ -23,20 +24,21 @@ function imagenDeProducto(nombre: string): string | null {
 }
 
 export default function CatalogoPage() {
-  const [productos, setProductos] = useState<Producto[]>([]);
-  const [cargando, setCargando] = useState(true);
-  const [error, setError] = useState("");
+  const {
+    data: productos = [],
+    isLoading: cargando,
+    isError,
+  } = useQuery<Producto[], Error>({
+    queryKey: ["catalogo", "productos"],
+    queryFn: listarProductos,
+    staleTime: 30_000,
+  });
+
+  const error = isError ? "No se pudieron cargar los productos." : "";
   const [mensaje, setMensaje] = useState("");
   const items = useCarritoStore((state) => state.items);
   const agregarProducto = useCarritoStore((state) => state.agregarProducto);
   const cantidadCarrito = calcularCantidadCarrito(items);
-
-  useEffect(() => {
-    listarProductos()
-      .then(setProductos)
-      .catch(() => setError("No se pudieron cargar los productos."))
-      .finally(() => setCargando(false));
-  }, []);
 
   function agregarAlCarrito(producto: Producto) {
     if (!producto.disponible || producto.stock <= 0) return;

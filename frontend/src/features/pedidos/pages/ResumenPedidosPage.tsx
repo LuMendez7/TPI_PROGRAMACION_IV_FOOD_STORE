@@ -1,12 +1,14 @@
-﻿import { useQuery } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import { api } from "@/api/axios";
 
 interface ResumenPedidos {
-  total_pedidos: number;
+  pendientes: number;
+  en_preparacion: number;
+  entregados: number;
+  cancelados: number;
   pedidos_hoy: number;
-  total_vendido: number;
-  por_estado: Record<string, number>;
+  ingresos_entregados: number;
 }
 
 const dinero = (valor: number) =>
@@ -46,11 +48,11 @@ export default function ResumenPedidosPage() {
   }
 
   const estados = [
-    ["PENDIENTE", "Pendientes"],
-    ["EN_PREPARACION", "En preparación"],
-    ["ENTREGADO", "Entregados"],
-    ["CANCELADO", "Cancelados"],
-  ];
+    ["pendientes", "Pendientes"],
+    ["en_preparacion", "En preparación"],
+    ["entregados", "Entregados"],
+    ["cancelados", "Cancelados"],
+  ] as const;
 
   return (
     <section className="space-y-6 text-slate-900 dark:text-white">
@@ -65,7 +67,7 @@ export default function ResumenPedidosPage() {
         <article className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-600 dark:bg-slate-800">
           <h2 className="text-sm font-medium">Total de pedidos</h2>
           <p className="mt-2 text-3xl font-bold">
-            {data.total_pedidos}
+            {(data.pendientes + data.en_preparacion + data.entregados + data.cancelados)}
           </p>
         </article>
 
@@ -79,7 +81,7 @@ export default function ResumenPedidosPage() {
         <article className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-600 dark:bg-slate-800">
           <h2 className="text-sm font-medium">Total vendido</h2>
           <p className="mt-2 text-3xl font-bold">
-            {dinero(data.total_vendido)}
+            {dinero(data.ingresos_entregados)}
           </p>
         </article>
       </div>
@@ -94,7 +96,7 @@ export default function ResumenPedidosPage() {
           >
             <p className="text-sm">{etiqueta}</p>
             <p className="mt-2 text-2xl font-bold">
-              {data.por_estado[clave] ?? 0}
+              {data[clave] ?? 0}
             </p>
           </article>
         ))}

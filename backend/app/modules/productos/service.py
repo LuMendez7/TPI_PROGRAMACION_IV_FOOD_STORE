@@ -3,6 +3,8 @@ from app.modules.productos.models import Producto
 from app.modules.productos.schemas import (
     ProductoCrear,
     ProductoActualizar,
+    ProductoLeer,
+    ProductosPaginados,
 )
 from app.modules.productos.unit_of_work import ProductoUnitOfWork
 from app.modules.productos.exceptions import (
@@ -27,58 +29,40 @@ class ProductoService:
     def listar_paginados(
         self,
         skip: int = 0,
-        limit: int = 10,
+        limit: int = 20,
         buscar: str | None = None,
         categoria_id: int | None = None,
         disponible: bool | None = None,
         solo_activos: bool = True,
     ):
-        """Lista productos con paginación, búsqueda y filtros."""
-
         with self.uow as uow:
-            if solo_activos:
-                productos = uow.productos.listar_activos()
-            else:
-                productos = uow.productos.listar()
+            total, productos = uow.productos.search(
+                skip=skip,
+                limit=limit,
+                search=buscar,
+                categoria_id=categoria_id,
+                disponible=disponible,
+                solo_activos=solo_activos,
+            )
 
-            if buscar:
-                texto = buscar.strip().casefold()
-
-                productos = [
-                    p for p in productos
-                    if texto in p.nombre.casefold()
-                    or texto in (p.descripcion or "").casefold()
-                ]
-
-            if categoria_id is not None:
-                productos = [
-                    p for p in productos
-                    if p.categoria_id == categoria_id
-                ]
-
-            if disponible is not None:
-                productos = [
-                    p for p in productos
-                    if p.disponible == disponible
-                ]
-
-            total = len(productos)
-
-            return {
-                "total": total,
-                "items": productos[skip:skip + limit],
-            }
+            return ProductosPaginados(
+                total=total,
+                items=[
+                    ProductoLeer.model_validate(producto)
+                    for producto in productos
+                ],
+            )
 
     def obtener(self, producto_id: int):
         with self.uow as uow:
             producto = uow.productos.obtener_por_id(producto_id)
 
-            if producto is None:
+            if producto is None or not producto.activo:
                 raise ProductoNoEncontradoError(
                     "Producto no encontrado."
                 )
 
-            return producto
+            return ProductoLeer.model_validate(producto)
 
     def crear(self, datos: ProductoCrear):
         with self.uow as uow:
@@ -97,8 +81,10 @@ class ProductoService:
             )
 
             uow.productos.agregar(producto)
+            uow.session.flush()
+            uow.session.refresh(producto)
 
-            return producto
+            return ProductoLeer.model_validate(producto)
 
     def actualizar(
         self,
@@ -108,7 +94,7 @@ class ProductoService:
         with self.uow as uow:
             producto = uow.productos.obtener_por_id(producto_id)
 
-            if producto is None:
+            if producto is None or not producto.activo:
                 raise ProductoNoEncontradoError(
                     "Producto no encontrado."
                 )
@@ -152,14 +138,16 @@ class ProductoService:
                 setattr(producto, campo, valor)
 
             uow.productos.actualizar(producto)
+            uow.session.flush()
+            uow.session.refresh(producto)
 
-            return producto
+            return ProductoLeer.model_validate(producto)
 
     def desactivar(self, producto_id: int):
         with self.uow as uow:
             producto = uow.productos.obtener_por_id(producto_id)
 
-            if producto is None:
+            if producto is None or not producto.activo:
                 raise ProductoNoEncontradoError(
                     "Producto no encontrado."
                 )

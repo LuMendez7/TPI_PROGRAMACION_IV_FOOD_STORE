@@ -1,7 +1,4 @@
-import { useState } from "react";
-import { useForm } from "@tanstack/react-form";
 import { Link } from "react-router-dom";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
 
 import {
   useCarritoStore,
@@ -9,8 +6,6 @@ import {
   calcularCantidadCarrito,
 } from "../../../store/carritoStore";
 
-import { crearPedido } from "../../pedidos/services/pedidoService";
-import type { PedidoCreate } from "../../pedidos/types/pedido";
 
 // Las mismas fotografías que utiliza el catálogo público.
 const imagenesProductos: Record<string, string> = {
@@ -32,12 +27,6 @@ function imagenDeProducto(nombre: string): string | null {
 }
 
 export default function CarritoPage() {
-  const queryClient = useQueryClient();
-
-  const crearPedidoMutation = useMutation({
-    mutationFn: crearPedido,
-  });
-
   const items = useCarritoStore((state) => state.items);
   const quitarProducto = useCarritoStore(
     (state) => state.quitarProducto
@@ -49,21 +38,6 @@ export default function CarritoPage() {
     (state) => state.vaciarCarrito
   );
 
-  const form = useForm({
-    defaultValues: {
-      formaPago: "EFECTIVO",
-      direccionEntrega: "",
-      notas: "",
-    },
-    onSubmit: async ({ value }) => {
-      await confirmarPedido(value);
-    },
-  });
-
-  const [procesando, setProcesando] = useState(false);
-  const [error, setError] = useState("");
-  const [mensaje, setMensaje] = useState("");
-
   const total = calcularTotalCarrito(items);
   const cantidad = calcularCantidadCarrito(items);
 
@@ -72,85 +46,6 @@ export default function CarritoPage() {
       style: "currency",
       currency: "ARS",
     });
-
-  const campo =
-    "mt-2 w-full rounded-lg border border-slate-300 bg-white px-4 py-3 text-slate-900 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200 dark:!border-slate-500 dark:!bg-slate-700 dark:!text-white dark:focus:!ring-blue-900";
-
-  async function confirmarPedido(
-    valores: {
-      formaPago: string;
-      direccionEntrega: string;
-      notas: string;
-    }
-  ) {
-    if (procesando || crearPedidoMutation.isPending) return;
-
-    setError("");
-    setMensaje("");
-
-    if (items.length === 0) {
-      setError("El carrito está vacío.");
-      return;
-    }
-
-    if (!valores.direccionEntrega.trim()) {
-      setError("Ingresá una dirección de entrega.");
-      return;
-    }
-
-  const cantidadesValidas = items.every(
-    (item) =>
-      Number.isInteger(item.cantidad) &&
-      item.cantidad > 0 &&
-      item.cantidad <= item.stock
-  );
-
-  if (!cantidadesValidas) {
-    setError(
-      "Revisá las cantidades. No pueden superar el stock disponible."
-    );
-    return;
-  }
-
-  const datos: PedidoCreate = {
-    forma_pago: valores.formaPago,
-    direccion_entrega: valores.direccionEntrega.trim(),
-    notas: valores.notas.trim(),
-    items: items.map((item) => ({
-      producto_id: item.producto_id,
-      cantidad: item.cantidad,
-    })),
-  };
-
-  setProcesando(true);
-
-  try {
-    const pedido = await crearPedidoMutation.mutateAsync(datos);
-
-    vaciarCarrito();
-    form.reset();
-
-    setMensaje(
-      `¡Pedido #${pedido.id} confirmado correctamente! Total: ${formatearPrecio(pedido.total)}.`
-    );
-
-    await Promise.allSettled([
-      queryClient.invalidateQueries({ queryKey: ["pedidos"] }),
-      queryClient.invalidateQueries({ queryKey: ["productos"] }),
-      queryClient.invalidateQueries({
-        queryKey: ["catalogo", "productos"],
-      }),
-    ]);
-  } catch (errorDesconocido) {
-    setError(
-      errorDesconocido instanceof Error
-        ? errorDesconocido.message
-        : "No se pudo confirmar el pedido."
-    );
-  } finally {
-    setProcesando(false);
-  }
-}
 
   return (
     <main className="min-h-screen bg-slate-50 p-6 text-slate-900 dark:!bg-slate-900 dark:!text-white">
@@ -173,31 +68,6 @@ export default function CarritoPage() {
             Seguir comprando
           </Link>
         </div>
-
-        {mensaje && (
-          <div
-            role="status"
-            className="mb-6 rounded-xl border border-green-300 bg-green-50 p-5 text-green-800 dark:!border-green-700 dark:!bg-green-950 dark:!text-green-200"
-          >
-            <p className="font-semibold">{mensaje}</p>
-
-            <Link
-              to="/pedidos"
-              className="mt-3 inline-block font-semibold underline"
-            >
-              Ver mis pedidos
-            </Link>
-          </div>
-        )}
-
-        {error && (
-          <div
-            role="alert"
-            className="mb-6 rounded-xl border border-red-300 bg-red-50 p-4 text-red-700 dark:!border-red-700 dark:!bg-red-950 dark:!text-red-200"
-          >
-            {error}
-          </div>
-        )}
 
         {items.length === 0 ? (
           <div className="rounded-xl border border-slate-200 bg-white p-10 text-center dark:!border-slate-600 dark:!bg-slate-800">
@@ -252,7 +122,7 @@ export default function CarritoPage() {
                           item.cantidad - 1
                         )
                       }
-                      disabled={procesando || item.cantidad <= 1}
+                      disabled={item.cantidad <= 1}
                       className="rounded-lg border border-slate-400 bg-white px-3 py-2 !text-slate-900 hover:bg-slate-100 disabled:opacity-40 dark:!border-slate-500 dark:!bg-slate-700 dark:!text-white dark:hover:!bg-slate-600"
                     >
                       −
@@ -272,7 +142,7 @@ export default function CarritoPage() {
                         )
                       }
                       disabled={
-                        procesando || item.cantidad >= item.stock
+                        item.cantidad >= item.stock
                       }
                       className="rounded-lg border border-slate-400 bg-white px-3 py-2 !text-slate-900 hover:bg-slate-100 disabled:opacity-40 dark:!border-slate-500 dark:!bg-slate-700 dark:!text-white dark:hover:!bg-slate-600"
                     >
@@ -290,7 +160,7 @@ export default function CarritoPage() {
 
                   <button
                     type="button"
-                    disabled={procesando}
+
                     onClick={() =>
                       quitarProducto(item.producto_id)
                     }
@@ -310,7 +180,7 @@ export default function CarritoPage() {
 
                 <button
                   type="button"
-                  disabled={procesando}
+
                   onClick={() => {
                     if (
                       window.confirm(
@@ -337,137 +207,14 @@ export default function CarritoPage() {
               </div>
             </div>
 
-            <form
-              onSubmit={(evento) => {
-                evento.preventDefault();
-                evento.stopPropagation();
-                void form.handleSubmit();
-              }}
-              className="space-y-5 rounded-xl border border-slate-200 bg-white p-6 dark:!border-slate-600 dark:!bg-slate-800"
-            >
-              <div>
-                <h2 className="text-2xl font-bold text-slate-900 dark:!text-white">
-                  Confirmar compra
-                </h2>
-
-                <p className="mt-2 text-sm text-slate-600 dark:!text-slate-300">
-                  Completá los datos para registrar tu pedido.
-                </p>
-              </div>
-
-              <div>
-                <label
-                  htmlFor="forma-pago"
-                  className="font-semibold text-slate-900 dark:!text-white"
-                >
-                  Forma de pago
-                </label>
-
-                <form.Field name="formaPago">
-                  {(field) => (
-                    <select
-                      id="forma-pago"
-                      name={field.name}
-                      value={field.state.value}
-                      onBlur={field.handleBlur}
-                      onChange={(evento) => field.handleChange(evento.target.value)}
-                      disabled={procesando}
-                      className={campo}
-                    >
-                      <option value="EFECTIVO">Efectivo</option>
-                      <option value="TRANSFERENCIA">Transferencia</option>
-                    </select>
-                  )}
-                </form.Field>
-              </div>
-
-              <div>
-                <label
-                  htmlFor="direccion-entrega"
-                  className="font-semibold text-slate-900 dark:!text-white"
-                >
-                  Dirección de entrega *
-                </label>
-
-                <form.Field
-                  name="direccionEntrega"
-                  validators={{
-                    onChange: ({ value }) =>
-                      value.trim()
-                        ? undefined
-                        : "Ingresá una dirección de entrega.",
-                  }}
-                >
-                  {(field) => (
-                    <>
-                      <input
-                        id="direccion-entrega"
-                        name={field.name}
-                        type="text"
-                        required
-                        maxLength={250}
-                        placeholder="Ej.: Calle 123, San Nicolás"
-                        value={field.state.value}
-                        onBlur={field.handleBlur}
-                        onChange={(evento) => field.handleChange(evento.target.value)}
-                        disabled={procesando}
-                        className={campo}
-                      />
-                      {field.state.meta.isTouched &&
-                        field.state.meta.errors.length > 0 && (
-                          <p className="mt-2 text-sm text-red-600">
-                            {field.state.meta.errors.join(", ")}
-                          </p>
-                        )}
-                    </>
-                  )}
-                </form.Field>
-              </div>
-
-              <div>
-                <label
-                  htmlFor="notas-pedido"
-                  className="font-semibold text-slate-900 dark:!text-white"
-                >
-                  Notas adicionales (opcional)
-                </label>
-
-                <form.Field name="notas">
-                  {(field) => (
-                    <textarea
-                      id="notas-pedido"
-                      name={field.name}
-                      rows={3}
-                      placeholder="Ej.: Sin cebolla, tocar timbre..."
-                      value={field.state.value}
-                      onBlur={field.handleBlur}
-                      onChange={(evento) => field.handleChange(evento.target.value)}
-                      disabled={procesando}
-                      className={campo}
-                    />
-                  )}
-                </form.Field>
-              </div>
-
-              <div className="flex flex-wrap items-center justify-between gap-4 border-t border-slate-200 pt-5 dark:!border-slate-600">
-                <p className="text-lg font-bold text-slate-900 dark:!text-white">
-                  Total:{" "}
-                  <span className="text-emerald-700 dark:!text-emerald-400">
-                    {formatearPrecio(total)}
-                  </span>
-                </p>
-
-                <button
-                  type="submit"
-                  disabled={procesando}
-                  className="rounded-lg bg-green-600 px-6 py-3 font-bold !text-white hover:bg-green-700 disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  {procesando
-                    ? "Confirmando pedido..."
-                    : "Confirmar pedido"}
-                </button>
-              </div>
-            </form>
+            <div className="flex justify-end">
+              <Link
+                to="/checkout"
+                className="rounded-lg bg-green-600 px-6 py-3 font-bold !text-white hover:bg-green-700"
+              >
+                Continuar al pago
+              </Link>
+            </div>
           </div>
         )}
       </div>

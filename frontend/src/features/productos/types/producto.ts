@@ -2,6 +2,7 @@ export interface Producto {
   id: number;
   nombre: string;
   descripcion: string;
+  imagen_url?: string | null;
   precio_base: number;
   stock: number;
   disponible: boolean;

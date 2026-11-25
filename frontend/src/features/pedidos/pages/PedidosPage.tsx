@@ -5,7 +5,6 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuthStore } from "../../../stores/authStore";
 import { listarProductos } from "../../productos/services/productoService";
 import {
-  listarPedidos,
   crearPedido,
   cambiarEstadoPedido,
   cancelarPedidoCliente,
@@ -81,31 +80,18 @@ export default function PedidosPage() {
     isLoading,
     isError,
   } = useQuery({
-    queryKey: ["pedidos", esAdmin, pagina, filtroEstado],
-    queryFn: async () => {
-      if (esAdmin) {
-        return await listarPedidosPaginados(
-          pagina,
-          10,
-          filtroEstado || undefined
-        );
-      }
-
-      const pedidos = await listarPedidos(false);
-
-      return {
-        pagina: 1,
-        limite: pedidos.length,
-        total: pedidos.length,
-        paginas: 1,
-        pedidos,
-      };
-    },
+    queryKey: ["pedidos", usuario?.id, esAdmin, pagina, filtroEstado],
+    queryFn: () =>
+      listarPedidosPaginados(
+        pagina,
+        10,
+        filtroEstado || undefined
+      ),
     enabled: Boolean(usuario),
   });
 
-  const pedidos = resultadoPedidos?.pedidos ?? [];
-  const totalPaginas = resultadoPedidos?.paginas ?? 1;
+  const pedidos = resultadoPedidos?.items ?? [];
+  const totalPaginas = Math.max(1, Math.ceil((resultadoPedidos?.total ?? 0) / 10));
 
   const {
     data: productos = [],
@@ -122,6 +108,7 @@ export default function PedidosPage() {
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ["pedidos"] }),
         queryClient.invalidateQueries({ queryKey: ["productos"] }),
+        queryClient.invalidateQueries({ queryKey: ["catalogo", "productos"] }),
       ]);
 
       setError("");
@@ -149,6 +136,7 @@ export default function PedidosPage() {
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ["pedidos"] }),
         queryClient.invalidateQueries({ queryKey: ["productos"] }),
+        queryClient.invalidateQueries({ queryKey: ["catalogo", "productos"] }),
       ]);
       setFormulario(formularioVacio());
       setMostrarFormulario(false);
@@ -165,6 +153,7 @@ export default function PedidosPage() {
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ["pedidos"] }),
         queryClient.invalidateQueries({ queryKey: ["productos"] }),
+        queryClient.invalidateQueries({ queryKey: ["catalogo", "productos"] }),
       ]);
       setError("");
       setMensaje("Estado actualizado correctamente.");
@@ -459,7 +448,7 @@ export default function PedidosPage() {
             </colgroup>
             <thead className="bg-slate-800 text-white dark:!bg-slate-700">
               <tr>
-                <th className="p-4">ID</th>
+                <th className="p-4">ID / Fecha</th>
                 {esAdmin && <th className="p-4">Usuario</th>}
                 <th className="p-4 text-center">Estado</th>
                 <th className="p-4 text-center">Pago</th>
@@ -502,7 +491,18 @@ export default function PedidosPage() {
                         </colgroup>
                         <tbody>
                           <tr className="border-t border-slate-200 bg-white text-slate-900 dark:!border-slate-600 dark:!bg-slate-800 dark:!text-slate-100">
-                            <td className="p-4 font-semibold">#{pedido.id}</td>
+                            <td className="p-4 font-semibold">
+                              #{pedido.id}
+                              <p className="mt-1 text-xs font-normal text-slate-500 dark:!text-slate-300">
+                                {new Date(
+                                  /(?:Z|[+-]\d{2}:?\d{2})$/i.test(pedido.created_at)
+                                    ? pedido.created_at
+                                    : pedido.created_at + "Z"
+                                ).toLocaleDateString("es-AR", {
+                                  timeZone: "America/Argentina/Buenos_Aires"
+                                })}
+                              </p>
+                            </td>
                             {esAdmin && <td className="p-4">Usuario #{pedido.usuario_id}</td>}
                             <td className="p-4 text-center">{etiquetaEstado(pedido.estado)}</td>
                             <td className="p-4 text-center capitalize">{pedido.forma_pago}</td>
@@ -600,7 +600,7 @@ export default function PedidosPage() {
         </div>
       )}
 
-      {esAdmin && !isLoading && !isError && totalPaginas > 1 && (
+      {!isLoading && !isError && totalPaginas > 1 && (
         <div className="flex items-center justify-center gap-4">
           <button
             type="button"

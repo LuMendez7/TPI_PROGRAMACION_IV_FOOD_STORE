@@ -45,3 +45,17 @@ class PedidoLeer(BaseModel):
 
 class PedidoEstadoActualizar(BaseModel):
     estado: str
+
+
+class PedidosPaginados(BaseModel):
+    total: int
+    items: list[PedidoLeer]
+
+
+class ResumenPedidos(BaseModel):
+    pendientes: int
+    en_preparacion: int
+    entregados: int
+    cancelados: int
+    pedidos_hoy: int
+    ingresos_entregados: float

@@ -21,14 +21,13 @@ interface UsuarioAdmin {
 const usuariosQueryKey = ["admin", "usuarios"] as const;
 
 async function listarUsuarios(): Promise<UsuarioAdmin[]> {
-  const respuesta = await api.get<UsuarioAdmin[]>("/usuarios/");
+  const respuesta = await api.get<UsuarioAdmin[]>("/admin/usuarios");
   return respuesta.data;
 }
 
 async function modificarEstado(usuario: UsuarioAdmin): Promise<void> {
-  await api.patch(`/usuarios/${usuario.id}/estado`, {
-    disabled: !usuario.disabled,
-  });
+  const accion = usuario.disabled ? "activar" : "desactivar";
+  await api.post(`/admin/usuarios/${usuario.id}/${accion}`);
 }
 
 function obtenerMensajeError(error: unknown): string {

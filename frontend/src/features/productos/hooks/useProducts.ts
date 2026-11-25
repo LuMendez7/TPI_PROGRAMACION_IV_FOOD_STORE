@@ -41,6 +41,10 @@ export function useCreateProduct() {
       void queryClient.invalidateQueries({
         queryKey: productsQueryKey,
       });
+
+      void queryClient.invalidateQueries({
+        queryKey: ["catalogo", "productos"],
+      });
     },
     onError: () => {
       useNotificationStore.getState().showNotification("No se pudo completar la operación.", "error");
@@ -65,6 +69,10 @@ export function useUpdateProduct() {
       void queryClient.invalidateQueries({
         queryKey: productsQueryKey,
       });
+
+      void queryClient.invalidateQueries({
+        queryKey: ["catalogo", "productos"],
+      });
     },
     onError: () => {
       useNotificationStore.getState().showNotification("No se pudo completar la operación.", "error");
@@ -84,6 +92,10 @@ export function useDeleteProduct() {
       void queryClient.invalidateQueries({
         queryKey: productsQueryKey,
       });
+
+      void queryClient.invalidateQueries({
+        queryKey: ["catalogo", "productos"],
+      });
     },
     onError: () => {
       useNotificationStore.getState().showNotification("No se pudo completar la operación.", "error");
@@ -98,10 +110,12 @@ export function useUpdateProductStock() {
     mutationFn: ({
       id,
       stock,
+      disponible,
     }: {
       id: number;
       stock: number;
-    }) => actualizarStockProducto(id, stock),
+      disponible: boolean;
+    }) => actualizarStockProducto(id, stock, disponible),
 
     onSuccess: () => {
       useNotificationStore

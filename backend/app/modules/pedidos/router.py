@@ -1,12 +1,14 @@
 
 from fastapi import APIRouter, Depends, Query, status
 
-from app.core.deps import obtener_usuario_actual, requerir_admin
+from app.core.deps import obtener_usuario_actual, require_role, get_current_active_user
 from app.modules.usuarios.models import Usuario
 from app.modules.pedidos.schemas import (
     PedidoCrear,
     PedidoLeer,
     PedidoEstadoActualizar,
+    PedidosPaginados,
+    ResumenPedidos,
 )
 from app.modules.pedidos.service import PedidoService
 
@@ -47,30 +49,31 @@ def mis_pedidos(
     response_model=list[PedidoLeer],
 )
 def listar_todos(
-    admin: Usuario = Depends(requerir_admin),
+    admin: Usuario = Depends(require_role(["admin"])),
     service: PedidoService = Depends(obtener_servicio),
 ):
     return service.listar_todos()
 
 
-@router.get("/")
+@router.get("/", response_model=PedidosPaginados)
 def listar_pedidos_paginados(
-    pagina: int = Query(default=1, ge=1),
-    limite: int = Query(default=10, ge=1, le=100),
+    skip: int = Query(default=0, ge=0),
+    limit: int = Query(default=20, ge=1, le=100),
     estado: str | None = Query(default=None),
-    admin: Usuario = Depends(requerir_admin),
+    usuario: Usuario = Depends(get_current_active_user),
     service: PedidoService = Depends(obtener_servicio),
 ):
     return service.listar_paginados(
-        pagina=pagina,
-        limite=limite,
         estado=estado,
+        usuario_id=None if usuario.role == "admin" else usuario.id,
+        skip=skip,
+        limit=limit,
     )
 
 
-@router.get("/resumen")
+@router.get("/resumen", response_model=ResumenPedidos)
 def resumen_administrativo(
-    admin: Usuario = Depends(requerir_admin),
+    admin: Usuario = Depends(require_role(["admin"])),
     service: PedidoService = Depends(obtener_servicio),
 ):
     return service.obtener_resumen()
@@ -96,7 +99,7 @@ def obtener_pedido(
 def cambiar_estado(
     pedido_id: int,
     datos: PedidoEstadoActualizar,
-    admin: Usuario = Depends(requerir_admin),
+    admin: Usuario = Depends(require_role(["admin"])),
     service: PedidoService = Depends(obtener_servicio),
 ):
     return service.cambiar_estado(pedido_id, datos)

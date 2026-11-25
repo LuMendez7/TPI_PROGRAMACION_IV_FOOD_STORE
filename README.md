@@ -14,7 +14,7 @@ Backend:
 - FastAPI
 - SQLModel
 - PostgreSQL
-- Autenticación JWT
+- Autenticación JWT mediante cookie HttpOnly
 
 Frontend:
 - React
@@ -23,6 +23,9 @@ Frontend:
 - Tailwind CSS
 - Zustand
 - React Router
+- TanStack Query
+- TanStack Form
+- TanStack Table
 
 ### Funcionalidades
 
@@ -31,15 +34,16 @@ Frontend:
 - Administración de usuarios.
 - Gestión de categorías.
 - Gestión de productos.
-- Catálogo de alimentos con imágenes.
+- Catálogo de alimentos con imágenes, búsqueda, filtro por categoría y paginación.
 - Carrito de compras.
+- Checkout independiente con formulario TanStack Form.
 - Consulta y administración de pedidos.
 - Gestión de estados de pedidos.
 - Validación de transiciones entre estados.
 - Cancelación de pedidos pendientes por el cliente.
 - Restitución automática del stock al cancelar.
 - Validación de disponibilidad, stock y productos duplicados.
-- Paginación de pedidos para administradores.
+- Paginación de pedidos para clientes y administradores.
 - Panel administrativo con resumen de pedidos y ventas.
 - Pruebas automatizadas del backend.
 - Interfaz adaptable a diferentes pantallas.
@@ -86,7 +90,7 @@ Para ejecutar Food Store se necesita:
 
 - Python 3.12.
 - PostgreSQL instalado y en funcionamiento.
-- Node.js y npm.
+- Node.js y pnpm.
 - Una base de datos PostgreSQL creada para el proyecto.
 
 ## Instalación y ejecución del backend
@@ -121,7 +125,7 @@ Para ejecutar Food Store se necesita:
 
 8. Iniciar la API:
 
-    uvicorn app.main_tpi:app --reload
+    uvicorn app.main:app --reload
 
 La documentación interactiva estará disponible en:
 
@@ -145,25 +149,25 @@ El archivo .env contiene información privada y no debe publicarse.
 
 ## Datos iniciales y administrador
 
-El proyecto incluye un script de inicialización:
+Para una instalación nueva de demostración, ejecutar
+desde la carpeta backend en PowerShell:
 
     python -m app.db.seed
 
-Este procedimiento permite preparar los datos iniciales de la aplicación, incluyendo el administrador, las categorías y los productos.
+Credenciales de demostración solicitadas en la consigna:
 
-El nombre de usuario predeterminado del administrador es:
+- Usuario: admin
+- Contraseña: Admin1234!
+- Rol: admin
 
-    admin
+Estas credenciales son exclusivamente para evaluación local.
+No deben utilizarse en producción.
 
-El correo predeterminado es:
+Para otras instalaciones, configurar una contraseña privada
+de al menos 12 caracteres mediante la variable SEED_ADMIN_PASSWORD.
 
-    admin@foodstore.local
-
-La contraseña del administrador se configura mediante la variable de entorno SEED_ADMIN_PASSWORD o se solicita durante la ejecución del seed cuando corresponde crear el usuario.
-
-La contraseña debe tener al menos 12 caracteres.
-
-Por seguridad, no se publica ninguna contraseña real en el repositorio.
+El seed es idempotente y no modifica la contraseña
+de un administrador existente.
 
 ## Configuración del frontend
 
@@ -173,19 +177,19 @@ Crear el archivo .env.local tomando como referencia frontend/.env.example.
 
 La variable VITE_API_URL debe apuntar a la API:
 
-    VITE_API_URL=http://127.0.0.1:8000/api/v1
+    VITE_API_URL=http://localhost:8000/api/v1
 
 Instalar las dependencias:
 
-    npm install
+    pnpm install
 
 Verificar la compilación:
 
-    npm run build
+    pnpm build
 
 Iniciar el frontend:
 
-    npm run dev
+    pnpm dev
 
 La aplicación estará disponible normalmente en:
 
@@ -237,6 +241,6 @@ Resultado de la verificación final:
 
 El frontend se verificó mediante:
 
-    npm run build
+    pnpm build
 
 La compilación finalizó correctamente.

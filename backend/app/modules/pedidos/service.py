@@ -1,5 +1,5 @@
 
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from zoneinfo import ZoneInfo
 
 from fastapi import HTTPException
@@ -253,95 +253,94 @@ class PedidoService:
         pagina: int = 1,
         limite: int = 10,
         estado: str | None = None,
+        usuario_id: int | None = None,
+        skip: int | None = None,
+        limit: int | None = None,
     ):
-        with self.uow as uow:
-            consulta = select(Pedido)
-            consulta_total = select(func.count()).select_from(Pedido)
+        if estado is not None:
+            estado = estado.upper()
 
-            if estado is not None:
-                estado = estado.upper()
-
-                if estado not in ESTADOS_VALIDOS:
-                    raise HTTPException(
-                        status_code=422,
-                        detail="Estado de pedido inválido.",
-                    )
-
-                consulta = consulta.where(func.upper(Pedido.estado) == estado)
-                consulta_total = consulta_total.where(
-                    func.upper(Pedido.estado) == estado
+            if estado not in ESTADOS_VALIDOS:
+                raise HTTPException(
+                    status_code=422,
+                    detail="Estado de pedido invalido.",
                 )
 
-            total = uow.session.exec(consulta_total).one()
+        limite_real = limit if limit is not None else limite
 
-            statement = (
-                consulta
-                .order_by(Pedido.created_at.desc(), Pedido.id.desc())
-                .offset((pagina - 1) * limite)
-                .limit(limite)
+        desplazamiento = (
+            skip if skip is not None
+            else (pagina - 1) * limite_real
+        )
+
+        with self.uow as uow:
+            total, pedidos = uow.pedidos.listar_paginados(
+                skip=desplazamiento,
+                limit=limite_real,
+                usuario_id=usuario_id,
+                estado=estado,
             )
 
-            pedidos = uow.session.exec(statement).all()
+            items = [
+                self.convertir_pedido(
+                    pedido,
+                    uow.detalles.listar_por_pedido(pedido.id),
+                )
+                for pedido in pedidos
+            ]
 
             return {
-                "pagina": pagina,
-                "limite": limite,
                 "total": total,
-                "paginas": (total + limite - 1) // limite,
-                "pedidos": [
-                    self.convertir_pedido(
-                        pedido,
-                        uow.detalles.listar_por_pedido(pedido.id),
-                    )
-                    for pedido in pedidos
-                ],
+                "items": items,
             }
 
     def obtener_resumen(self):
         with self.uow as uow:
-            pedidos = uow.session.exec(select(Pedido)).all()
+            zona = ZoneInfo("America/Argentina/Buenos_Aires")
 
-            zona_argentina = ZoneInfo("America/Argentina/Buenos_Aires")
-            hoy = datetime.now(zona_argentina).date()
+            inicio = datetime.now(zona).replace(
+                hour=0,
+                minute=0,
+                second=0,
+                microsecond=0,
+            )
+
+            fin = inicio + timedelta(days=1)
+
+            inicio_utc = inicio.astimezone(timezone.utc).replace(
+                tzinfo=None
+            )
+
+            fin_utc = fin.astimezone(timezone.utc).replace(
+                tzinfo=None
+            )
 
             por_estado = {
-                "PENDIENTE": 0,
-                "EN_PREPARACION": 0,
-                "ENTREGADO": 0,
-                "CANCELADO": 0,
+                estado: uow.pedidos.count_by_estado(estado)
+                for estado in (
+                    "PENDIENTE",
+                    "EN_PREPARACION",
+                    "ENTREGADO",
+                    "CANCELADO",
+                )
             }
 
-            total_vendido = 0.0
-            pedidos_hoy = 0
+            pedidos_hoy = uow.pedidos.contar_entre_fechas(
+                inicio_utc,
+                fin_utc,
+            )
 
-            for pedido in pedidos:
-                estado = pedido.estado.upper()
-
-                if estado in por_estado:
-                    por_estado[estado] += 1
-
-                if estado == "ENTREGADO":
-                    total_vendido += pedido.total
-
-                fecha_creacion = pedido.created_at
-
-                if fecha_creacion.tzinfo is None:
-                    fecha_creacion = fecha_creacion.replace(
-                        tzinfo=timezone.utc
-                    )
-
-                fecha_argentina = fecha_creacion.astimezone(
-                    zona_argentina
-                ).date()
-
-                if fecha_argentina == hoy:
-                    pedidos_hoy += 1
+            ingresos = round(
+                float(uow.pedidos.ingresos_entregados()), 2
+            )
 
             return {
-                "total_pedidos": len(pedidos),
+                "pendientes": por_estado["PENDIENTE"],
+                "en_preparacion": por_estado["EN_PREPARACION"],
+                "entregados": por_estado["ENTREGADO"],
+                "cancelados": por_estado["CANCELADO"],
                 "pedidos_hoy": pedidos_hoy,
-                "por_estado": por_estado,
-                "total_vendido": round(total_vendido, 2),
+                "ingresos_entregados": ingresos,
             }
 
     def cambiar_estado(

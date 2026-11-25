@@ -1,6 +1,7 @@
 
 from pydantic import ConfigDict, Field, field_validator
 from sqlmodel import SQLModel
+from app.modules.categorias.schemas import CategoriaLeer
 
 
 class ProductoCrear(SQLModel):
@@ -63,9 +64,11 @@ class ProductoLeer(SQLModel):
     stock: int
     disponible: bool
     activo: bool
+    categoria: CategoriaLeer
 
 class ProductoStockActualizar(SQLModel):
     stock: int = Field(ge=0)
+    disponible: bool
 
 
 class ProductosPaginados(SQLModel):

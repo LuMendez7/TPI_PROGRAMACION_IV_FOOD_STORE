@@ -100,12 +100,10 @@ export async function cancelarPedidoCliente(
 }
 
 
+
 export interface PedidosPaginados {
-  pagina: number;
-  limite: number;
   total: number;
-  paginas: number;
-  pedidos: Pedido[];
+  items: Pedido[];
 }
 
 export async function listarPedidosPaginados(
@@ -118,8 +116,8 @@ export async function listarPedidosPaginados(
       "/pedidos/",
       {
         params: {
-          pagina,
-          limite,
+          skip: (pagina - 1) * limite,
+          limit: limite,
           ...(estado ? { estado } : {}),
         },
       }

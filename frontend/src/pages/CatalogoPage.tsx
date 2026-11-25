@@ -1,7 +1,11 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
-import { listarProductos, type Producto } from "../services/productos";
+import { listarProductosPaginados, type Producto } from "../services/productos";
+import { useCategories } from "../features/categorias/hooks/useCategories";
+import Skeleton from "../shared/components/Skeleton";
+import EstadoVacio from "../shared/components/EstadoVacio";
+import Paginacion from "../shared/components/Paginacion";
 import { useCarritoStore, calcularCantidadCarrito } from "../store/carritoStore";
 import "./CatalogoPage.css";
 
@@ -24,15 +28,46 @@ function imagenDeProducto(nombre: string): string | null {
 }
 
 export default function CatalogoPage() {
+  const [busqueda, setBusqueda] = useState("");
+  const [categoriaId, setCategoriaId] = useState("");
+  const [pagina, setPagina] = useState(0);
+
+  const limite = 8;
+
+  const { data: categorias = [] } = useCategories();
+
   const {
-    data: productos = [],
+    data,
     isLoading: cargando,
     isError,
-  } = useQuery<Producto[], Error>({
-    queryKey: ["catalogo", "productos"],
-    queryFn: listarProductos,
+  } = useQuery({
+    queryKey: [
+      "catalogo",
+      "productos",
+      pagina,
+      busqueda,
+      categoriaId,
+    ],
+    queryFn: () =>
+      listarProductosPaginados({
+        skip: pagina * limite,
+        limit: limite,
+        search: busqueda.trim() || undefined,
+        categoria_id: categoriaId
+          ? Number(categoriaId)
+          : undefined,
+      }),
     staleTime: 30_000,
   });
+
+  const productos = data?.items ?? [];
+  const total = data?.total ?? 0;
+
+  function limpiarFiltros() {
+    setBusqueda("");
+    setCategoriaId("");
+    setPagina(0);
+  }
 
   const error = isError ? "No se pudieron cargar los productos." : "";
   const [mensaje, setMensaje] = useState("");
@@ -77,15 +112,60 @@ export default function CatalogoPage() {
           </Link>
         </header>
 
+        <div className="mb-8 grid gap-4 rounded-xl border border-slate-200 bg-white p-5 shadow-sm dark:!border-slate-700 dark:!bg-slate-800 sm:grid-cols-2">
+          <label className="block">
+            <span className="mb-2 block text-sm font-semibold text-slate-700 dark:!text-slate-200">
+              Buscar productos
+            </span>
+            <input
+              type="search"
+              value={busqueda}
+              placeholder="Buscar por nombre..."
+              onChange={(evento) => {
+                setBusqueda(evento.target.value);
+                setPagina(0);
+              }}
+              className="w-full rounded-lg border border-slate-300 bg-white p-3 text-slate-900 dark:!border-slate-600 dark:!bg-slate-700 dark:!text-white"
+            />
+          </label>
+
+          <label className="block">
+            <span className="mb-2 block text-sm font-semibold text-slate-700 dark:!text-slate-200">
+              Categoría
+            </span>
+            <select
+              value={categoriaId}
+              onChange={(evento) => {
+                setCategoriaId(evento.target.value);
+                setPagina(0);
+              }}
+              className="w-full rounded-lg border border-slate-300 bg-white p-3 text-slate-900 dark:!border-slate-600 dark:!bg-slate-700 dark:!text-white"
+            >
+              <option value="">Todas las categorías</option>
+              {categorias.map((categoria) => (
+                <option key={categoria.id} value={categoria.id}>
+                  {categoria.nombre}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
+
         {mensaje && (
           <div role="status" className="mb-6 flex items-center justify-between gap-3 rounded-lg border border-emerald-200 bg-emerald-50 p-4 text-emerald-800 dark:!border-emerald-800 dark:!bg-emerald-950 dark:!text-emerald-200">
             <span>{mensaje}</span>
             <button type="button" onClick={() => setMensaje("")} aria-label="Cerrar mensaje" className="font-bold">×</button>
           </div>
         )}
-        {cargando && <p className="text-slate-600 dark:!text-slate-300">Cargando productos...</p>}
+        {cargando && <Skeleton />}
         {error && <p role="alert" className="rounded-lg bg-red-100 p-4 text-red-700 dark:!bg-red-950 dark:!text-red-200">{error}</p>}
-        {!cargando && !error && productos.length === 0 && <p>No hay productos disponibles.</p>}
+        {!cargando && !error && productos.length === 0 && (
+          <EstadoVacio
+            titulo="No encontramos productos"
+            mensaje="Probá con otra búsqueda o categoría."
+            onLimpiar={limpiarFiltros}
+          />
+        )}
 
         {!cargando && !error && productos.length > 0 && (
           <div className="catalogo-seccion-titulo">
@@ -93,7 +173,7 @@ export default function CatalogoPage() {
               <h2>Nuestro menú</h2>
               <p>Elegí tu favorito y agregalo al carrito.</p>
             </div>
-            <span className="catalogo-contador-productos">{productos.length} productos</span>
+            <span className="catalogo-contador-productos">{total} productos</span>
           </div>
         )}
 
@@ -103,7 +183,7 @@ export default function CatalogoPage() {
               const disponible = producto.disponible && producto.stock > 0;
               const cantidadAgregada = items.find((item) => item.producto_id === producto.id)?.cantidad ?? 0;
               const stockAlcanzado = cantidadAgregada >= producto.stock;
-              const imagen = imagenDeProducto(producto.nombre);
+              const imagen = producto.imagen_url || imagenDeProducto(producto.nombre);
               return (
                 <article key={producto.id} className="catalogo-tarjeta">
                   {imagen ? (
@@ -136,6 +216,15 @@ export default function CatalogoPage() {
               );
             })}
           </section>
+        )}
+
+        {!cargando && !error && total > 0 && (
+          <Paginacion
+            pagina={pagina}
+            limite={limite}
+            total={total}
+            onChange={setPagina}
+          />
         )}
       </div>
     </main>

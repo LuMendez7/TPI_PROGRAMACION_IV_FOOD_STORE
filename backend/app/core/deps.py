@@ -31,8 +31,14 @@ def obtener_usuario_actual(request: Request) -> Usuario:
     with UsuarioUnitOfWork() as uow:
         usuario = uow.usuarios.obtener_por_id(usuario_id)
 
-        if usuario is None or usuario.disabled:
+        if usuario is None:
             raise error
+
+        if usuario.disabled:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="La cuenta esta deshabilitada.",
+            )
 
         return usuario
 
@@ -57,7 +63,7 @@ def get_current_active_user(
     """Devuelve el usuario autenticado y activo."""
     if usuario.disabled:
         raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
+            status_code=status.HTTP_400_BAD_REQUEST,
             detail="La cuenta está deshabilitada.",
         )
 

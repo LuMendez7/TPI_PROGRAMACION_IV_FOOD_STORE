@@ -107,12 +107,13 @@ export async function eliminarProducto(id: number): Promise<void> {
 
 export async function actualizarStockProducto(
   id: number,
-  stock: number
+  stock: number,
+  disponible: boolean
 ): Promise<Producto> {
   try {
     const response = await api.patch<Producto>(
       `/productos/${id}/stock`,
-      { stock }
+      { stock, disponible }
     );
 
     return response.data;

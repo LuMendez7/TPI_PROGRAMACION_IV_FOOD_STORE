@@ -15,7 +15,7 @@ from app.modules.usuarios.service import UsuarioService
 router = APIRouter(
     prefix="/api/v1/usuarios",
     tags=["Usuarios - Administración"],
-    dependencies=[Depends(requerir_admin)],
+    dependencies=[Depends(require_role(["admin"]))],
 )
 
 
@@ -42,14 +42,12 @@ def obtener_usuario(
 def cambiar_estado(
     usuario_id: int,
     datos: UsuarioEstadoActualizar,
-    admin: Usuario = Depends(requerir_admin),
+    admin: Usuario = Depends(require_role(["admin"])),
     service: UsuarioService = Depends(obtener_servicio),
 ):
     if admin.id == usuario_id and datos.disabled:
-        from fastapi import HTTPException
-
         raise HTTPException(
-            status_code=409,
+            status_code=400,
             detail="No podés desactivar tu propia cuenta.",
         )
 
@@ -63,7 +61,7 @@ def cambiar_estado(
 def cambiar_rol(
     usuario_id: int,
     datos: UsuarioRolActualizar,
-    admin: Usuario = Depends(requerir_admin),
+    admin: Usuario = Depends(require_role(["admin"])),
     service: UsuarioService = Depends(obtener_servicio),
 ):
     if admin.id == usuario_id and datos.role != "admin":
@@ -89,7 +87,7 @@ admin_router = APIRouter(
 )
 
 
-@admin_router.patch(
+@admin_router.post(
     "/usuarios/{usuario_id}/activar",
     response_model=UsuarioLeer,
 )
@@ -103,7 +101,7 @@ def activar_usuario(
     )
 
 
-@admin_router.patch(
+@admin_router.post(
     "/usuarios/{usuario_id}/desactivar",
     response_model=UsuarioLeer,
 )
@@ -114,7 +112,7 @@ def desactivar_usuario(
 ):
     if admin.id == usuario_id:
         raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
+            status_code=status.HTTP_400_BAD_REQUEST,
             detail="No podés desactivar tu propia cuenta.",
         )
 
@@ -122,3 +120,9 @@ def desactivar_usuario(
         usuario_id,
         True,
     )
+
+@admin_router.get("/usuarios", response_model=list[UsuarioLeer])
+def listar_usuarios_admin(
+    service: UsuarioService = Depends(obtener_servicio),
+):
+    return service.listar()

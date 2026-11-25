@@ -2,6 +2,7 @@
 import {
   flexRender,
   getCoreRowModel,
+  getPaginationRowModel,
   useReactTable,
   type ColumnDef,
 } from "@tanstack/react-table";
@@ -66,6 +67,13 @@ export default function CategoriaTable({
     data: categorias,
     columns,
     getCoreRowModel: getCoreRowModel(),
+    getPaginationRowModel: getPaginationRowModel(),
+    initialState: {
+      pagination: {
+        pageIndex: 0,
+        pageSize: 5,
+      },
+    },
   });
 
   return (
@@ -104,6 +112,45 @@ export default function CategoriaTable({
           ))}
         </tbody>
       </table>
+
+      <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-200 p-4 dark:!border-slate-600">
+        <span className="text-sm">
+          P&aacute;gina {table.getState().pagination.pageIndex + 1} de {Math.max(1, table.getPageCount())}
+        </span>
+
+        <div className="flex items-center gap-2">
+          <select
+            aria-label="Categorias por pagina"
+            value={table.getState().pagination.pageSize}
+            onChange={(e) => table.setPageSize(Number(e.target.value))}
+            className="rounded-lg border border-slate-300 p-2 dark:!bg-slate-700"
+          >
+            {[5, 10, 20].map((cantidad) => (
+              <option key={cantidad} value={cantidad}>
+                {cantidad} por pagina
+              </option>
+            ))}
+          </select>
+
+          <button
+            type="button"
+            onClick={() => table.previousPage()}
+            disabled={!table.getCanPreviousPage()}
+            className="rounded-lg bg-slate-700 px-3 py-2 text-white disabled:opacity-40"
+          >
+            Anterior
+          </button>
+
+          <button
+            type="button"
+            onClick={() => table.nextPage()}
+            disabled={!table.getCanNextPage()}
+            className="rounded-lg bg-blue-600 px-3 py-2 text-white disabled:opacity-40"
+          >
+            Siguiente
+          </button>
+        </div>
+      </div>
     </div>
   );
 }

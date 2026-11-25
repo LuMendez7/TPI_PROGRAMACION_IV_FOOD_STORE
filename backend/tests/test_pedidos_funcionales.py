@@ -1,4 +1,4 @@
-﻿import pytest
+import pytest
 from fastapi import HTTPException
 from sqlalchemy.pool import StaticPool
 from sqlmodel import SQLModel, Session, create_engine, select
@@ -198,18 +198,75 @@ def test_transiciones_de_estado(entorno):
 
 
 def test_paginacion_y_resumen(entorno):
-    servicio, _, (usuario, _, producto) = entorno
+    servicio, _, (usuario, otro, producto) = entorno
 
-    crear_pedido(servicio, usuario, producto, cantidad=1)
-    crear_pedido(servicio, usuario, producto, cantidad=2)
+    primero = crear_pedido(
+        servicio, usuario, producto, cantidad=1
+    )
 
-    pagina = servicio.listar_paginados(pagina=1, limite=1)
+    segundo = crear_pedido(
+        servicio, otro, producto, cantidad=2
+    )
+
+    pagina = servicio.listar_paginados(skip=0, limit=1)
+    siguiente = servicio.listar_paginados(skip=1, limit=1)
+
+    assert set(pagina) == {"total", "items"}
+    assert pagina["total"] == 2
+    assert siguiente["total"] == 2
+    assert len(pagina["items"]) == 1
+    assert len(siguiente["items"]) == 1
+
+    assert pagina["items"][0]["id"] == segundo["id"]
+    assert siguiente["items"][0]["id"] == primero["id"]
+
+    propios = servicio.listar_paginados(
+        skip=0,
+        limit=20,
+        usuario_id=usuario,
+    )
+
+    assert propios["total"] == 1
+    assert propios["items"][0]["usuario_id"] == usuario
+
+    pendientes = servicio.listar_paginados(
+        skip=0,
+        limit=20,
+        estado="PENDIENTE",
+    )
+
+    assert pendientes["total"] == 2
+
     resumen = servicio.obtener_resumen()
 
-    assert pagina["total"] == 2
-    assert pagina["paginas"] == 2
-    assert len(pagina["pedidos"]) == 1
+    assert set(resumen) == {
+        "pendientes",
+        "en_preparacion",
+        "entregados",
+        "cancelados",
+        "pedidos_hoy",
+        "ingresos_entregados",
+    }
 
-    assert resumen["total_pedidos"] == 2
-    assert resumen["por_estado"]["PENDIENTE"] == 2
-    assert resumen["total_vendido"] == 0
+    assert resumen["pendientes"] == 2
+    assert resumen["en_preparacion"] == 0
+    assert resumen["entregados"] == 0
+    assert resumen["cancelados"] == 0
+    assert resumen["pedidos_hoy"] == 2
+    assert resumen["ingresos_entregados"] == 0
+
+    servicio.cambiar_estado(
+        primero["id"],
+        PedidoEstadoActualizar(estado="EN_PREPARACION"),
+    )
+
+    servicio.cambiar_estado(
+        primero["id"],
+        PedidoEstadoActualizar(estado="ENTREGADO"),
+    )
+
+    resumen = servicio.obtener_resumen()
+
+    assert resumen["pendientes"] == 1
+    assert resumen["entregados"] == 1
+    assert resumen["ingresos_entregados"] == primero["total"]

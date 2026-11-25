@@ -13,7 +13,7 @@ export interface Producto {
   activo: boolean;
 }
 
-interface ProductosPaginados {
+export interface ProductosPaginados {
   total: number;
   items: Producto[];
 }
@@ -45,4 +45,22 @@ export async function listarProductos(): Promise<Producto[]> {
   }
 
   return productos;
+}
+
+export interface FiltrosCatalogo {
+  skip: number;
+  limit: number;
+  search?: string;
+  categoria_id?: number;
+}
+
+export async function listarProductosPaginados(
+  filtros: FiltrosCatalogo
+): Promise<ProductosPaginados> {
+  const respuesta = await api.get<ProductosPaginados>(
+    "/productos/",
+    { params: filtros }
+  );
+
+  return respuesta.data;
 }

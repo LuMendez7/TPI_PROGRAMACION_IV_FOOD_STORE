@@ -5,6 +5,7 @@ import Navbar from "@/shared/components/Navbar";
 import ProtectedRoute from "@/routes/ProtectedRoute";
 import CatalogoPage from "@/pages/CatalogoPage";
 import CarritoPage from "@/features/carrito/pages/CarritoPage";
+import CheckoutPage from "@/features/carrito/pages/CheckoutPage";
 import ResumenPedidosPage from "@/features/pedidos/pages/ResumenPedidosPage";
 
 import { LoginPage, RegistroPage, UnauthorizedPage } from "@/features/auth";
@@ -38,7 +39,7 @@ export default function AppRouter() {
             <Route path="/carrito" element={<CarritoPage />} />
             <Route path="/mis-pedidos" element={<PedidosPage />} />
             {/* Nuevas rutas del cliente */}
-            <Route path="/checkout" element={<CarritoPage />} />
+            <Route path="/checkout" element={<CheckoutPage />} />
           </Route>
 
           {/* Rutas exclusivas del administrador */}

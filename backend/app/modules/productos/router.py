@@ -1,7 +1,7 @@
 
 from fastapi import APIRouter, Depends, Query, HTTPException, status
 
-from app.core.deps import requerir_admin
+from app.core.deps import require_role
 from app.modules.productos.exceptions import (
     ProductoNoEncontradoError,
     CategoriaProductoNoValidaError,
@@ -55,8 +55,9 @@ def traducir_error_producto(exc: Exception):
 )
 def listar_productos_paginados(
     skip: int = Query(default=0, ge=0),
-    limit: int = Query(default=10, ge=1, le=100),
+    limit: int = Query(default=20, ge=1, le=100),
     buscar: str | None = Query(default=None),
+    search: str | None = Query(default=None),
     categoria_id: int | None = Query(default=None, gt=0),
     disponible: bool | None = Query(default=None),
     solo_activos: bool = Query(default=True),
@@ -65,10 +66,10 @@ def listar_productos_paginados(
     return service.listar_paginados(
         skip=skip,
         limit=limit,
-        buscar=buscar,
+        buscar=search if search is not None else buscar,
         categoria_id=categoria_id,
         disponible=disponible,
-        solo_activos=solo_activos,
+        solo_activos=True,
     )
 
 
@@ -78,8 +79,9 @@ def listar_productos_paginados(
 )
 def listar_productos(
     skip: int = Query(default=0, ge=0),
-    limit: int = Query(default=10, ge=1, le=100),
+    limit: int = Query(default=20, ge=1, le=100),
     buscar: str | None = Query(default=None),
+    search: str | None = Query(default=None),
     categoria_id: int | None = Query(default=None, gt=0),
     disponible: bool | None = Query(default=None),
     solo_activos: bool = Query(default=True),
@@ -88,10 +90,10 @@ def listar_productos(
     return service.listar_paginados(
         skip=skip,
         limit=limit,
-        buscar=buscar,
+        buscar=search if search is not None else buscar,
         categoria_id=categoria_id,
         disponible=disponible,
-        solo_activos=solo_activos,
+        solo_activos=True,
     )
 
 
@@ -113,7 +115,7 @@ def obtener_producto(
     "/",
     response_model=ProductoLeer,
     status_code=status.HTTP_201_CREATED,
-    dependencies=[Depends(requerir_admin)],
+    dependencies=[Depends(require_role(["admin"]))],
 )
 def crear_producto(
     datos: ProductoCrear,
@@ -128,7 +130,7 @@ def crear_producto(
 @router.put(
     "/{producto_id}",
     response_model=ProductoLeer,
-    dependencies=[Depends(requerir_admin)],
+    dependencies=[Depends(require_role(["admin"]))],
 )
 def actualizar_producto(
     producto_id: int,
@@ -148,7 +150,7 @@ def actualizar_producto(
 @router.delete(
     "/{producto_id}",
     status_code=status.HTTP_204_NO_CONTENT,
-    dependencies=[Depends(requerir_admin)],
+    dependencies=[Depends(require_role(["admin"]))],
 )
 def desactivar_producto(
     producto_id: int,
@@ -163,7 +165,7 @@ def desactivar_producto(
 @router.patch(
     "/{producto_id}/stock",
     response_model=ProductoLeer,
-    dependencies=[Depends(requerir_admin)],
+    dependencies=[Depends(require_role(["admin"]))],
 )
 def actualizar_stock_producto(
     producto_id: int,
@@ -173,7 +175,7 @@ def actualizar_stock_producto(
     try:
         return service.actualizar(
             producto_id,
-            ProductoActualizar(stock=datos.stock),
+            ProductoActualizar(**datos.model_dump(exclude_none=True)),
         )
     except (
         ProductoNoEncontradoError,

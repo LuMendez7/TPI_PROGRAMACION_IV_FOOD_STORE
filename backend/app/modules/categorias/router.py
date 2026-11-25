@@ -1,7 +1,7 @@
 
 from fastapi import APIRouter, Depends, HTTPException, status
 
-from app.core.deps import requerir_admin
+from app.core.deps import require_role
 from app.modules.categorias.exceptions import (
     CategoriaNoEncontradaError,
     CategoriaDuplicadaError,
@@ -75,7 +75,7 @@ def obtener_categoria(
     "/",
     response_model=CategoriaLeer,
     status_code=status.HTTP_201_CREATED,
-    dependencies=[Depends(requerir_admin)],
+    dependencies=[Depends(require_role(["admin"]))],
 )
 def crear_categoria(
     datos: CategoriaCrear,
@@ -90,7 +90,7 @@ def crear_categoria(
 @router.put(
     "/{categoria_id}",
     response_model=CategoriaLeer,
-    dependencies=[Depends(requerir_admin)],
+    dependencies=[Depends(require_role(["admin"]))],
 )
 def actualizar_categoria(
     categoria_id: int,
@@ -110,7 +110,7 @@ def actualizar_categoria(
 @router.delete(
     "/{categoria_id}",
     status_code=status.HTTP_204_NO_CONTENT,
-    dependencies=[Depends(requerir_admin)],
+    dependencies=[Depends(require_role(["admin"]))],
 )
 def desactivar_categoria(
     categoria_id: int,

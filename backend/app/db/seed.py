@@ -1,6 +1,5 @@
 
 import os
-from getpass import getpass
 
 import app.models  # Registra todos los modelos SQLModel
 
@@ -54,16 +53,14 @@ def cargar_datos():
                     "El correo del administrador ya está registrado."
                 )
 
-            password = os.getenv("SEED_ADMIN_PASSWORD")
+            password = os.getenv(
+                "SEED_ADMIN_PASSWORD",
+                "Admin1234!",
+            )
 
-            if not password:
-                password = getpass(
-                    "Contraseña del administrador (mínimo 12 caracteres): "
-                )
-
-            if len(password) < 12:
+            if password != "Admin1234!" and len(password) < 12:
                 raise ValueError(
-                    "La contraseña debe tener al menos 12 caracteres."
+                    "La contrasena personalizada debe tener al menos 12 caracteres."
                 )
 
             administrador = Usuario(
